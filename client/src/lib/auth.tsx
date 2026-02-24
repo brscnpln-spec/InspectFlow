@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 
 interface AuthContextType {
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    queryClient.clear();
     setUser(null);
   };
 

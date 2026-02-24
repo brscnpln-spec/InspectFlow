@@ -18,6 +18,7 @@ import TeamPage from "@/pages/team";
 import AnalyticsPage from "@/pages/analytics";
 import MemberInspectionsPage from "@/pages/member-inspections";
 import NpsSurveyPage from "@/pages/nps-survey";
+import CalendarPage from "@/pages/calendar";
 
 function AdminRouter() {
   return (
@@ -29,6 +30,7 @@ function AdminRouter() {
       <Route path="/emergency" component={EmergencyPage} />
       <Route path="/team" component={TeamPage} />
       <Route path="/analytics" component={AnalyticsPage} />
+      <Route path="/calendar" component={CalendarPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -39,6 +41,7 @@ function MemberRouter() {
     <Switch>
       <Route path="/" component={MemberInspectionsPage} />
       <Route path="/inspections/:id" component={InspectionDetailPage} />
+      <Route path="/calendar" component={CalendarPage} />
       <Route component={NotFound} />
     </Switch>
   );

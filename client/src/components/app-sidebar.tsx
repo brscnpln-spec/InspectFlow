@@ -5,6 +5,7 @@ import {
   LogOut,
   Users,
   AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -26,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 const adminItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Inspections", url: "/inspections", icon: ClipboardList },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Emergency", url: "/emergency", icon: AlertTriangle },
   { title: "Team", url: "/team", icon: Users },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
@@ -33,6 +35,7 @@ const adminItems = [
 
 const memberItems = [
   { title: "My Inspections", url: "/", icon: ClipboardList },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
 ];
 
 export function AppSidebar() {

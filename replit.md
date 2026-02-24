@@ -26,6 +26,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 4. Analytics dashboard with NPS scores, distribution charts
 5. Emergency inspection tracking
 6. Team management view
+7. Calendar view - Monthly grid showing inspections; Admin sees all inspections color-coded by service member, Members see only their own
 
 ## Project Structure
 - `shared/schema.ts` - Database schema and types

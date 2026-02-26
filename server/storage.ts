@@ -5,6 +5,7 @@ import {
   inspectionRequests,
   npsSurveys,
   npsResponses,
+  inspectionReports,
   type User,
   type InsertUser,
   type InspectionRequest,
@@ -13,6 +14,8 @@ import {
   type InsertNpsSurvey,
   type NpsResponse,
   type InsertNpsResponse,
+  type InspectionReport,
+  type InsertInspectionReport,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -37,6 +40,12 @@ export interface IStorage {
   createNpsResponse(data: InsertNpsResponse): Promise<NpsResponse>;
   getNpsResponses(): Promise<NpsResponse[]>;
   getNpsResponsesByMember(memberId: string): Promise<NpsResponse[]>;
+
+  createInspectionReport(data: InsertInspectionReport): Promise<InspectionReport>;
+  getReportsByInspection(inspectionId: string): Promise<InspectionReport[]>;
+  getReportsByUploader(inspectionId: string, uploadedById: string): Promise<InspectionReport[]>;
+  getReport(id: string): Promise<InspectionReport | undefined>;
+  deleteReport(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -123,6 +132,35 @@ export class DatabaseStorage implements IStorage {
 
   async getNpsResponsesByMember(memberId: string): Promise<NpsResponse[]> {
     return db.select().from(npsResponses).where(eq(npsResponses.serviceMemberId, memberId));
+  }
+
+  async createInspectionReport(data: InsertInspectionReport): Promise<InspectionReport> {
+    const [report] = await db.insert(inspectionReports).values(data).returning();
+    return report;
+  }
+
+  async getReportsByInspection(inspectionId: string): Promise<InspectionReport[]> {
+    return db.select().from(inspectionReports)
+      .where(eq(inspectionReports.inspectionId, inspectionId))
+      .orderBy(inspectionReports.uploadedAt);
+  }
+
+  async getReportsByUploader(inspectionId: string, uploadedById: string): Promise<InspectionReport[]> {
+    return db.select().from(inspectionReports)
+      .where(and(
+        eq(inspectionReports.inspectionId, inspectionId),
+        eq(inspectionReports.uploadedById, uploadedById)
+      ))
+      .orderBy(inspectionReports.uploadedAt);
+  }
+
+  async getReport(id: string): Promise<InspectionReport | undefined> {
+    const [report] = await db.select().from(inspectionReports).where(eq(inspectionReports.id, id));
+    return report;
+  }
+
+  async deleteReport(id: string): Promise<void> {
+    await db.delete(inspectionReports).where(eq(inspectionReports.id, id));
   }
 }
 

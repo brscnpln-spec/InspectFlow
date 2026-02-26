@@ -27,6 +27,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 5. Emergency inspection tracking
 6. Team management view
 7. Calendar view - Monthly grid showing inspections; Admin sees all inspections color-coded by service member, Members see only their own
+8. Inspection report file upload - Mandatory file upload before closing inspections; Admin sees all reports, service members see only their own uploads
 
 ## Project Structure
 - `shared/schema.ts` - Database schema and types
@@ -46,4 +47,6 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - POST /api/inspections/:id/trigger-nps
 - GET /api/survey/:token, POST /api/survey/:token/respond
 - GET /api/nps/responses
+- POST /api/inspections/:id/reports, GET /api/inspections/:id/reports
+- GET /api/reports/:id/download, DELETE /api/reports/:id
 - GET /api/users/service-members, GET /api/users/:id

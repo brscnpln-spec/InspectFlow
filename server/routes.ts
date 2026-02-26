@@ -1,6 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { comparePasswords } from "./auth";
 import { seedDatabase } from "./seed";
@@ -9,6 +12,22 @@ import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { z } from "zod";
 import { loginSchema } from "@shared/schema";
+
+const uploadsDir = path.join("/tmp", "inspection-uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const uniqueName = `${Date.now()}-${randomUUID()}${path.extname(file.originalname)}`;
+      cb(null, uniqueName);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 
 const createInspectionSchema = z.object({
   companyName: z.string().min(1),
@@ -152,6 +171,14 @@ export async function registerRoutes(
   app.get("/api/inspections/:id", requireAuth, async (req: Request, res: Response) => {
     const inspection = await storage.getInspection(req.params.id);
     if (!inspection) return res.status(404).json({ message: "Not found" });
+
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    if (user.role !== "admin" && inspection.assignedServiceMemberId !== user.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     res.json(inspection);
   });
 
@@ -204,12 +231,27 @@ export async function registerRoutes(
   });
 
   app.patch("/api/inspections/:id/close", requireAuth, async (req: Request, res: Response) => {
+    const inspection = await storage.getInspection(req.params.id);
+    if (!inspection) return res.status(404).json({ message: "Not found" });
+
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    if (user.role !== "admin" && inspection.assignedServiceMemberId !== user.id) {
+      return res.status(403).json({ message: "You are not assigned to this inspection" });
+    }
+
+    const reports = await storage.getReportsByInspection(req.params.id);
+    if (reports.length === 0) {
+      return res.status(400).json({ message: "An inspection report file must be uploaded before closing" });
+    }
+
     const { completionNotes } = req.body;
-    const inspection = await storage.updateInspection(req.params.id, {
+    const updated = await storage.updateInspection(req.params.id, {
       status: "closed",
       completionNotes: completionNotes || null,
     });
-    res.json(inspection);
+    res.json(updated);
   });
 
   app.patch("/api/inspections/:id/final-close", requireAdmin, async (req: Request, res: Response) => {
@@ -315,6 +357,89 @@ export async function registerRoutes(
   app.get("/api/nps/responses", requireAdmin, async (req: Request, res: Response) => {
     const responses = await storage.getNpsResponses();
     res.json(responses);
+  });
+
+  app.post("/api/inspections/:id/reports", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const inspection = await storage.getInspection(req.params.id);
+    if (!inspection) {
+      return res.status(404).json({ message: "Inspection not found" });
+    }
+
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    if (user.role !== "admin" && inspection.assignedServiceMemberId !== user.id) {
+      return res.status(403).json({ message: "You are not assigned to this inspection" });
+    }
+
+    const report = await storage.createInspectionReport({
+      inspectionId: req.params.id,
+      uploadedById: req.session.userId!,
+      fileName: req.file.filename,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      fileSize: req.file.size,
+    });
+
+    res.status(201).json(report);
+  });
+
+  app.get("/api/inspections/:id/reports", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    let reports;
+    if (user.role === "admin") {
+      reports = await storage.getReportsByInspection(req.params.id);
+    } else {
+      reports = await storage.getReportsByUploader(req.params.id, user.id);
+    }
+    res.json(reports);
+  });
+
+  app.get("/api/reports/:id/download", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    const report = await storage.getReport(req.params.id);
+    if (!report) return res.status(404).json({ message: "Report not found" });
+
+    if (user.role !== "admin" && report.uploadedById !== user.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const filePath = path.join(uploadsDir, report.fileName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "File not found on server" });
+    }
+
+    res.setHeader("Content-Disposition", `attachment; filename="${report.originalName}"`);
+    res.setHeader("Content-Type", report.mimeType);
+    res.sendFile(filePath);
+  });
+
+  app.delete("/api/reports/:id", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    const report = await storage.getReport(req.params.id);
+    if (!report) return res.status(404).json({ message: "Report not found" });
+
+    if (report.uploadedById !== user.id && user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const filePath = path.join(uploadsDir, report.fileName);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await storage.deleteReport(report.id);
+    res.json({ message: "Report deleted" });
   });
 
   return httpServer;

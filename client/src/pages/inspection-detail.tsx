@@ -35,12 +35,15 @@ import {
   Send,
   Loader2,
   AlertTriangle,
+  Download,
+  Trash2,
+  File,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { StatusBadge } from "./dashboard";
-import type { InspectionRequest, User } from "@shared/schema";
-import { useState } from "react";
+import type { InspectionRequest, User, InspectionReport } from "@shared/schema";
+import { useState, useRef } from "react";
 
 export default function InspectionDetailPage() {
   const [, params] = useRoute("/inspections/:id");
@@ -53,6 +56,10 @@ export default function InspectionDetailPage() {
   const [assignMemberId, setAssignMemberId] = useState("");
   const [assignDate, setAssignDate] = useState("");
   const [assignTime, setAssignTime] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const completeFileInputRef = useRef<HTMLInputElement>(null);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
 
   const { data: inspection, isLoading } = useQuery<InspectionRequest>({
     queryKey: ["/api/inspections", params?.id],
@@ -67,6 +74,16 @@ export default function InspectionDetailPage() {
   const { data: assignedMember } = useQuery<User>({
     queryKey: ["/api/users", inspection?.assignedServiceMemberId],
     enabled: !!inspection?.assignedServiceMemberId,
+  });
+
+  const { data: reports = [], isLoading: reportsLoading } = useQuery<InspectionReport[]>({
+    queryKey: ["/api/inspections", params?.id, "reports"],
+    enabled: !!params?.id,
+  });
+
+  const { data: allMembers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users/service-members"],
+    enabled: isAdmin && reports.length > 0,
   });
 
   const assignMutation = useMutation({
@@ -96,6 +113,7 @@ export default function InspectionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+      setCompleteDialogOpen(false);
       toast({ title: "Inspection marked as completed" });
     },
     onError: (err: Error) => {
@@ -145,6 +163,60 @@ export default function InspectionDetailPage() {
     },
   });
 
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/inspections/${params?.id}/reports`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Upload failed");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id, "reports"] });
+      toast({ title: "Report uploaded successfully" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const res = await fetch(`/api/reports/${reportId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Delete failed");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id, "reports"] });
+      toast({ title: "Report deleted" });
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const getMemberName = (id: string) => {
+    const member = allMembers.find((m) => m.id === id);
+    return member?.name || "Unknown";
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
@@ -161,6 +233,8 @@ export default function InspectionDetailPage() {
       </div>
     );
   }
+
+  const canUploadReport = !isAdmin && (inspection.status === "scheduled" || inspection.status === "closed");
 
   return (
     <div className="p-6 overflow-auto h-full">
@@ -251,7 +325,7 @@ export default function InspectionDetailPage() {
             )}
 
             {!isAdmin && inspection.status === "scheduled" && (
-              <Dialog>
+              <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" data-testid="button-complete">
                     <CheckCircle2 className="w-4 h-4 mr-1" />
@@ -263,6 +337,85 @@ export default function InspectionDetailPage() {
                     <DialogTitle>Complete Inspection</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">
+                        Inspection Report File <span className="text-red-500">*</span>
+                      </label>
+                      {reports.length === 0 ? (
+                        <div className="border-2 border-dashed border-red-300 rounded-lg p-4 text-center bg-red-50">
+                          <Upload className="w-6 h-6 mx-auto mb-2 text-red-400" />
+                          <p className="text-sm text-red-600 font-medium mb-2">Report file is required</p>
+                          <input
+                            ref={completeFileInputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileUpload(file);
+                              e.target.value = "";
+                            }}
+                            data-testid="input-report-file-dialog"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => completeFileInputRef.current?.click()}
+                            disabled={uploading}
+                            data-testid="button-upload-report-dialog"
+                          >
+                            {uploading ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Upload className="w-4 h-4 mr-1" />
+                            )}
+                            Upload Report
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="border border-green-300 rounded-lg p-3 bg-green-50">
+                          <div className="flex items-center gap-2 text-green-700">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span className="text-sm font-medium">{reports.length} report(s) uploaded</span>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {reports.map((r) => (
+                              <div key={r.id} className="flex items-center gap-2 text-xs text-green-600">
+                                <File className="w-3 h-3" />
+                                <span>{r.originalName}</span>
+                                <span className="text-green-500">({formatFileSize(r.fileSize)})</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2">
+                            <input
+                              ref={completeFileInputRef}
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(file);
+                                e.target.value = "";
+                              }}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs h-7"
+                              onClick={() => completeFileInputRef.current?.click()}
+                              disabled={uploading}
+                              data-testid="button-upload-additional-report"
+                            >
+                              {uploading ? (
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                              ) : (
+                                <Upload className="w-3 h-3 mr-1" />
+                              )}
+                              Add another file
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Completion Notes</label>
                       <Textarea
@@ -277,7 +430,7 @@ export default function InspectionDetailPage() {
                     <Button
                       className="w-full"
                       onClick={() => closeMutation.mutate()}
-                      disabled={closeMutation.isPending}
+                      disabled={closeMutation.isPending || reports.length === 0}
                       data-testid="button-confirm-complete"
                     >
                       {closeMutation.isPending ? (
@@ -285,6 +438,9 @@ export default function InspectionDetailPage() {
                       ) : null}
                       Mark as Completed
                     </Button>
+                    {reports.length === 0 && (
+                      <p className="text-xs text-red-500 text-center">Upload a report file to complete this inspection</p>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>
@@ -467,6 +623,122 @@ export default function InspectionDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Upload className="w-4 h-4 text-[#ffb800]" />
+                Inspection Reports
+              </h3>
+              {canUploadReport && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                      e.target.value = "";
+                    }}
+                    data-testid="input-report-file"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    data-testid="button-upload-report"
+                  >
+                    {uploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-1" />
+                    )}
+                    Upload Report
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {reportsLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">
+                <File className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No reports uploaded yet</p>
+                {canUploadReport && (
+                  <p className="text-xs mt-1">Upload a report file to complete this inspection</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2" data-testid="reports-list">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/30"
+                    data-testid={`report-item-${report.id}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded bg-[#ffb800]/10 flex items-center justify-center flex-shrink-0">
+                        <File className="w-4 h-4 text-[#ffb800]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`report-name-${report.id}`}>
+                          {report.originalName}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatFileSize(report.fileSize)}</span>
+                          {isAdmin && (
+                            <>
+                              <span>·</span>
+                              <span data-testid={`report-uploader-${report.id}`}>
+                                {getMemberName(report.uploadedById)}
+                              </span>
+                            </>
+                          )}
+                          {report.uploadedAt && (
+                            <>
+                              <span>·</span>
+                              <span>{new Date(report.uploadedAt).toLocaleDateString()}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => window.open(`/api/reports/${report.id}/download`, "_blank")}
+                        data-testid={`button-download-report-${report.id}`}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      {(!isAdmin && report.uploadedById === user?.id && inspection.status === "scheduled") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                          onClick={() => handleDeleteReport(report.id)}
+                          data-testid={`button-delete-report-${report.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

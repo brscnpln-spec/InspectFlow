@@ -63,10 +63,22 @@ export const npsResponses = pgTable("nps_responses", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const inspectionReports = pgTable("inspection_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inspectionId: varchar("inspection_id").notNull(),
+  uploadedById: varchar("uploaded_by_id").notNull(),
+  fileName: text("file_name").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertInspectionSchema = createInsertSchema(inspectionRequests).omit({ id: true, createdAt: true, updatedAt: true, status: true });
 export const insertNpsSurveySchema = createInsertSchema(npsSurveys).omit({ id: true, sentAt: true, completedAt: true });
 export const insertNpsResponseSchema = createInsertSchema(npsResponses).omit({ id: true, createdAt: true });
+export const insertInspectionReportSchema = createInsertSchema(inspectionReports).omit({ id: true, uploadedAt: true });
 
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -81,3 +93,5 @@ export type NpsSurvey = typeof npsSurveys.$inferSelect;
 export type InsertNpsSurvey = z.infer<typeof insertNpsSurveySchema>;
 export type NpsResponse = typeof npsResponses.$inferSelect;
 export type InsertNpsResponse = z.infer<typeof insertNpsResponseSchema>;
+export type InspectionReport = typeof inspectionReports.$inferSelect;
+export type InsertInspectionReport = z.infer<typeof insertInspectionReportSchema>;

@@ -19,10 +19,12 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const adminItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -41,8 +43,16 @@ const memberItems = [
 export function AppSidebar() {
   const { user, logout } = useAuth();
   const [location] = useLocation();
+  const { setOpenMobile } = useSidebar();
+  const isMobile = useIsMobile();
   const isAdmin = user?.role === "admin";
   const items = isAdmin ? adminItems : memberItems;
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar>
@@ -68,7 +78,7 @@ export function AppSidebar() {
                     asChild
                     data-active={location === item.url}
                   >
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
+                    <Link href={item.url} onClick={handleNavClick} data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                       <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>
                     </Link>

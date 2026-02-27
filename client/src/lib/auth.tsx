@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [, setLocation] = useLocation();
 
   const fetchUser = useCallback(async () => {
     try {
@@ -49,12 +51,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const data = await res.json();
     setUser(data);
+    setLocation("/");
   };
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     queryClient.clear();
     setUser(null);
+    setLocation("/");
   };
 
   return (

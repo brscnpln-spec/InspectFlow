@@ -38,6 +38,9 @@ import {
   Download,
   Trash2,
   File,
+  Copy,
+  Link,
+  ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +63,7 @@ export default function InspectionDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const completeFileInputRef = useRef<HTMLInputElement>(null);
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [surveyUrl, setSurveyUrl] = useState<string | null>(null);
 
   const { data: inspection, isLoading } = useQuery<InspectionRequest>({
     queryKey: ["/api/inspections", params?.id],
@@ -139,10 +143,13 @@ export default function InspectionDetailPage() {
 
   const npsMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/inspections/${params?.id}/trigger-nps`);
+      const res = await apiRequest("POST", `/api/inspections/${params?.id}/trigger-nps`);
+      return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "NPS survey triggered successfully" });
+    onSuccess: (data: { surveyUrl: string }) => {
+      const fullUrl = `${window.location.origin}${data.surveyUrl}`;
+      setSurveyUrl(fullUrl);
+      toast({ title: "NPS survey created successfully" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -500,6 +507,54 @@ export default function InspectionDetailPage() {
                   )}
                   Send NPS Survey
                 </Button>
+
+                <Dialog open={!!surveyUrl} onOpenChange={(open) => !open && setSurveyUrl(null)}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Link className="w-5 h-5 text-[#ffb800]" />
+                        NPS Survey Link
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        Share this link with the customer. The survey is valid for 24 hours.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          readOnly
+                          value={surveyUrl || ""}
+                          className="text-sm font-mono"
+                          data-testid="input-survey-url"
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid="button-copy-survey-url"
+                          onClick={() => {
+                            if (surveyUrl) {
+                              navigator.clipboard.writeText(surveyUrl);
+                              toast({ title: "Link copied to clipboard" });
+                            }
+                          }}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        data-testid="button-open-survey"
+                        onClick={() => window.open(surveyUrl!, "_blank")}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open Survey in New Tab
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </>
             )}
 

@@ -49,4 +49,5 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - GET /api/nps/responses
 - POST /api/inspections/:id/reports, GET /api/inspections/:id/reports
 - GET /api/reports/:id/download, DELETE /api/reports/:id
-- GET /api/users/service-members, GET /api/users/:id
+- GET /api/users (admin-only, all users), GET /api/users/service-members, GET /api/users/:id
+- POST /api/users (admin-only, create user), PATCH /api/users/:id (admin-only, update user), DELETE /api/users/:id (admin-only, delete user)

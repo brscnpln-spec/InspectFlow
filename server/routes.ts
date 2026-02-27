@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { comparePasswords } from "./auth";
+import { comparePasswords, hashPassword } from "./auth";
 import { seedDatabase } from "./seed";
 import { randomUUID } from "crypto";
 import connectPgSimple from "connect-pg-simple";
@@ -148,11 +148,98 @@ export async function registerRoutes(
     res.json(members.map(({ password: _, ...m }) => m));
   });
 
+  app.get("/api/users", requireAdmin, async (req: Request, res: Response) => {
+    const allUsers = await storage.getAllUsers();
+    res.json(allUsers.map(({ password: _, ...u }) => u));
+  });
+
   app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
     const user = await storage.getUser(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = user;
     res.json(safeUser);
+  });
+
+  const createUserSchema = z.object({
+    username: z.string().min(1, "Username is required").max(50),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    name: z.string().min(1, "Name is required").max(100),
+    email: z.string().email("Invalid email address"),
+    role: z.enum(["admin", "service_member"]),
+    assignedAdminId: z.string().nullable().optional(),
+  });
+
+  const updateUserSchema = z.object({
+    username: z.string().min(1).max(50).optional(),
+    password: z.string().min(6).optional(),
+    name: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional(),
+    role: z.enum(["admin", "service_member"]).optional(),
+    assignedAdminId: z.string().nullable().optional(),
+  });
+
+  app.post("/api/users", requireAdmin, async (req: Request, res: Response) => {
+    const parsed = createUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    const { username, password, name, email, role, assignedAdminId } = parsed.data;
+    const existing = await storage.getUserByUsername(username);
+    if (existing) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+    const hashedPassword = await hashPassword(password);
+    const user = await storage.createUser({
+      username,
+      password: hashedPassword,
+      name,
+      email,
+      role,
+      assignedAdminId: assignedAdminId || null,
+    });
+    const { password: _, ...safeUser } = user;
+    res.status(201).json(safeUser);
+  });
+
+  app.patch("/api/users/:id", requireAdmin, async (req: Request, res: Response) => {
+    const parsed = updateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    const existingUser = await storage.getUser(req.params.id as string);
+    if (!existingUser) return res.status(404).json({ message: "User not found" });
+
+    const { username, password, name, email, role, assignedAdminId } = parsed.data;
+
+    if (username && username !== existingUser.username) {
+      const dup = await storage.getUserByUsername(username);
+      if (dup) return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (username) updateData.username = username;
+    if (assignedAdminId !== undefined) updateData.assignedAdminId = assignedAdminId || null;
+    if (password) updateData.password = await hashPassword(password);
+
+    const user = await storage.updateUser(req.params.id as string, updateData);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    const { password: _, ...safeUser } = user;
+    res.json(safeUser);
+  });
+
+  app.delete("/api/users/:id", requireAdmin, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.params.id as string);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.id === req.session.userId) {
+      return res.status(400).json({ message: "Cannot delete yourself" });
+    }
+
+    await storage.deleteUser(req.params.id as string);
+    res.json({ message: "User deleted" });
   });
 
   app.get("/api/inspections", requireAuth, async (req: Request, res: Response) => {

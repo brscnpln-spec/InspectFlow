@@ -142,12 +142,14 @@ export default function AnalyticsPage() {
         </Card>
       ) : (
         <Tabs defaultValue="overview">
-          <TabsList>
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="report" data-testid="tab-report">Report NPS</TabsTrigger>
-            <TabsTrigger value="service" data-testid="tab-service">Service NPS</TabsTrigger>
-            <TabsTrigger value="team" data-testid="tab-team">By Team Member</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <TabsList className="inline-flex w-auto min-w-max">
+              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+              <TabsTrigger value="report" data-testid="tab-report">Report NPS</TabsTrigger>
+              <TabsTrigger value="service" data-testid="tab-service">Service NPS</TabsTrigger>
+              <TabsTrigger value="team" data-testid="tab-team">By Team Member</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="mt-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

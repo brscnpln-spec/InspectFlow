@@ -4,16 +4,8 @@ import { useRoute } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   ClipboardList,
   CheckCircle2,
@@ -22,6 +14,7 @@ import {
   Building2,
   Loader2,
   AlertCircle,
+  Mail,
 } from "lucide-react";
 
 interface SurveyData {
@@ -29,12 +22,12 @@ interface SurveyData {
     companyName: string;
     inspectionDate: string;
     contactPerson1: string;
+    email1: string;
   };
   serviceMember: {
     id: string;
     name: string;
   };
-  serviceMembers: { id: string; name: string }[];
   expired: boolean;
   completed: boolean;
 }
@@ -44,8 +37,6 @@ export default function NpsSurveyPage() {
   const [reportScore, setReportScore] = useState<number | null>(null);
   const [serviceScore, setServiceScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
-  const [email, setEmail] = useState("");
-  const [selectedMemberId, setSelectedMemberId] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const { data: survey, isLoading, error } = useQuery<SurveyData>({
@@ -59,8 +50,6 @@ export default function NpsSurveyPage() {
         reportScore,
         serviceScore,
         comment: comment || undefined,
-        respondentEmail: email,
-        serviceMemberId: selectedMemberId || survey?.serviceMember.id,
       });
     },
     onSuccess: () => setSubmitted(true),
@@ -144,54 +133,28 @@ export default function NpsSurveyPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
-              <Building2 className="w-4 h-4 text-[#ffb800]" />
-              <span>{survey.inspection.companyName}</span>
+              <Building2 className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
+              <span data-testid="text-survey-company">{survey.inspection.companyName}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4 text-[#ffb800]" />
-              <span>{survey.inspection.inspectionDate || "N/A"}</span>
+              <Calendar className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
+              <span data-testid="text-survey-date">{survey.inspection.inspectionDate || "N/A"}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <UserIcon className="w-4 h-4 text-[#ffb800]" />
-              <span>{survey.serviceMember.name}</span>
+              <UserIcon className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
+              <span data-testid="text-survey-contact">{survey.inspection.contactPerson1}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Mail className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
+              <span data-testid="text-survey-email">{survey.inspection.email1}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <UserIcon className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
+              <span className="text-muted-foreground">Service Member:</span>
+              <span className="font-medium" data-testid="text-survey-member">{survey.serviceMember.name}</span>
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <h2 className="font-semibold text-sm">Your Email (required)</h2>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              data-testid="input-survey-email"
-            />
-          </CardContent>
-        </Card>
-
-        {survey.serviceMembers && survey.serviceMembers.length > 1 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <h2 className="font-semibold text-sm">Rate which service person?</h2>
-            </CardHeader>
-            <CardContent>
-              <Select onValueChange={setSelectedMemberId} value={selectedMemberId}>
-                <SelectTrigger data-testid="select-survey-member">
-                  <SelectValue placeholder="Select service personnel" />
-                </SelectTrigger>
-                <SelectContent>
-                  {survey.serviceMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -235,7 +198,7 @@ export default function NpsSurveyPage() {
 
         <Button
           className="w-full"
-          disabled={reportScore === null || !email || submitMutation.isPending}
+          disabled={reportScore === null || submitMutation.isPending}
           onClick={() => submitMutation.mutate()}
           data-testid="button-submit-survey"
         >

@@ -55,8 +55,7 @@ const npsResponseSchema = z.object({
   reportScore: z.number().min(0).max(10),
   serviceScore: z.number().min(0).max(10).optional().nullable(),
   comment: z.string().optional().nullable(),
-  respondentEmail: z.string().email(),
-  serviceMemberId: z.string().optional(),
+  respondentEmail: z.string().optional().nullable(),
 });
 
 declare module "express-session" {
@@ -396,17 +395,14 @@ export async function registerRoutes(
       }
     }
 
-    const allMembers = await storage.getServiceMembers();
-    const serviceMembers = allMembers.map((m) => ({ id: m.id, name: m.name }));
-
     res.json({
       inspection: {
         companyName: inspection.companyName,
         inspectionDate: inspection.inspectionDate,
         contactPerson1: inspection.contactPerson1,
+        email1: inspection.email1,
       },
       serviceMember: serviceMember || { id: "", name: "Unknown" },
-      serviceMembers,
       expired,
       completed,
     });
@@ -422,18 +418,18 @@ export async function registerRoutes(
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid survey data", errors: parsed.error.flatten() });
     }
-    const { reportScore, serviceScore, comment, respondentEmail, serviceMemberId } = parsed.data;
+    const { reportScore, serviceScore, comment, respondentEmail } = parsed.data;
 
     const inspection = await storage.getInspection(survey.inspectionId);
 
     await storage.createNpsResponse({
       surveyId: survey.id,
       inspectionId: survey.inspectionId,
-      serviceMemberId: serviceMemberId || inspection?.assignedServiceMemberId || "",
+      serviceMemberId: inspection?.assignedServiceMemberId || "",
       reportScore,
       serviceScore: serviceScore ?? null,
       comment: comment || null,
-      respondentEmail,
+      respondentEmail: respondentEmail || inspection?.email1 || "",
     });
 
     await storage.updateNpsSurvey(survey.id, { completedAt: new Date() });

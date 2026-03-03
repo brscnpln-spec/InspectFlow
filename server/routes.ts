@@ -713,6 +713,14 @@ async function pushSchema() {
       ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS assignment_responded_at TIMESTAMP;
     `);
 
+    await dbPool.query(`
+      UPDATE inspection_requests
+      SET assignment_status = 'accepted'
+      WHERE assigned_service_member_id IS NOT NULL
+        AND assignment_status IS NULL
+        AND status IN ('scheduled', 'closed', 'final_closed');
+    `);
+
     console.log("Database schema verified successfully");
   } catch (e: any) {
     console.error("Schema verification error:", e.message);

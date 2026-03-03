@@ -168,6 +168,11 @@ export default function DashboardPage() {
                             Emergency
                           </Badge>
                         )}
+                        {inspection.assignmentStatus === "pending" && (
+                          <Badge variant="outline" className="text-[10px] border-[#ffb800] text-[#b38200]">
+                            Pending Approval
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {inspection.contactPerson1}

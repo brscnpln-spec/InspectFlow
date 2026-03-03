@@ -39,7 +39,7 @@ export default function MemberInspectionsPage() {
     (i) => i.status === "scheduled" && i.assignmentStatus === "pending"
   );
   const scheduled = inspections.filter(
-    (i) => i.status === "scheduled" && i.assignmentStatus === "accepted"
+    (i) => i.status === "scheduled" && i.assignmentStatus !== "pending"
   );
   const completed = inspections.filter(
     (i) => i.status === "closed" || i.status === "final_closed"

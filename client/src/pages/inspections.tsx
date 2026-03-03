@@ -120,6 +120,11 @@ export default function InspectionsPage() {
                             Emergency
                           </Badge>
                         )}
+                        {inspection.assignmentStatus === "pending" && (
+                          <Badge variant="outline" className="text-[10px] border-[#ffb800] text-[#b38200]" data-testid={`badge-pending-${inspection.id}`}>
+                            Pending Approval
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Contact: {inspection.contactPerson1}

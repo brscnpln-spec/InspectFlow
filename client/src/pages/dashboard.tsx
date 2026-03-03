@@ -68,7 +68,7 @@ export default function DashboardPage() {
     queryKey: ["/api/inspections"],
   });
 
-  const newCount = inspections.filter((i) => i.status === "new").length;
+  const pendingCount = inspections.filter((i) => i.assignmentStatus === "pending").length;
   const scheduledCount = inspections.filter((i) => i.status === "scheduled").length;
   const closedCount = inspections.filter((i) => i.status === "closed" || i.status === "final_closed").length;
   const emergencyCount = inspections.filter((i) => i.isEmergency).length;
@@ -118,7 +118,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="New Requests" value={newCount} icon={ClipboardList} />
+        <StatCard title="Pending Approval" value={pendingCount} icon={ClipboardList} accent="#ffb800" />
         <StatCard title="Scheduled" value={scheduledCount} icon={Clock} accent="#f59e0b" />
         <StatCard title="Completed" value={closedCount} icon={CheckCircle2} accent="#22c55e" />
         <StatCard title="Emergency" value={emergencyCount} icon={AlertTriangle} accent="#ef4444" />

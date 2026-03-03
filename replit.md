@@ -46,6 +46,8 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - GET /api/inspections, GET /api/inspections/:id, POST /api/inspections, PATCH /api/inspections/:id (admin edit)
 - PATCH /api/inspections/:id/assign, /close, /final-close, /cancel, /accept-assignment, /reject-assignment
 - POST /api/inspections/:id/trigger-nps
+- GET /api/inspections/:id/nps-survey (admin-only, get NPS survey status)
+- POST /api/inspections/:id/reactivate-nps (admin-only, extend NPS expiry 24h)
 - GET /api/survey/:token, POST /api/survey/:token/respond
 - GET /api/nps/responses
 - POST /api/inspections/:id/reports, GET /api/inspections/:id/reports

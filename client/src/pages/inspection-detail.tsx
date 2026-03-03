@@ -43,6 +43,7 @@ import {
   ExternalLink,
   Check,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -111,6 +112,24 @@ export default function InspectionDetailPage() {
   const { data: allMembers = [] } = useQuery<User[]>({
     queryKey: ["/api/users/service-members"],
     enabled: isAdmin && reports.length > 0,
+  });
+
+  const { data: npsSurveyData } = useQuery<{ surveyUrl: string; isActive: boolean; survey: { expiresAt: string; completedAt: string | null } }>({
+    queryKey: ["/api/inspections", params?.id, "nps-survey"],
+    enabled: isAdmin && inspection?.status === "final_closed",
+  });
+
+  const reactivateNpsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/inspections/${params?.id}/reactivate-nps`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id, "nps-survey"] });
+      toast({ title: "NPS survey reactivated for 24 hours" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
 
   const assignMutation = useMutation({
@@ -369,6 +388,53 @@ export default function InspectionDetailPage() {
               )}
             </div>
             <StatusBadge status={inspection.status} />
+            {isAdmin && inspection.status === "final_closed" && npsSurveyData && (
+              <div className="flex items-center gap-2 mt-1">
+                {npsSurveyData.survey.completedAt ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    NPS Completed
+                  </Badge>
+                ) : npsSurveyData.isActive ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs border-[#ffb800] text-[#ffb800] hover:bg-[#ffb800]/10"
+                    onClick={() => {
+                      const fullUrl = `${window.location.origin}${npsSurveyData.surveyUrl}`;
+                      navigator.clipboard.writeText(fullUrl);
+                      toast({ title: "NPS survey link copied to clipboard" });
+                    }}
+                    data-testid="button-nps-active-link"
+                  >
+                    <Link className="w-3 h-3 mr-1" />
+                    NPS Active — Copy Link
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
+                      <X className="w-3 h-3 mr-1" />
+                      NPS Expired
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => reactivateNpsMutation.mutate()}
+                      disabled={reactivateNpsMutation.isPending}
+                      data-testid="button-reactivate-nps"
+                    >
+                      {reactivateNpsMutation.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                      ) : (
+                        <RefreshCw className="w-3 h-3 mr-1" />
+                      )}
+                      Reactivate
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">

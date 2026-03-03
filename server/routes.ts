@@ -576,6 +576,35 @@ export async function registerRoutes(
     res.json({ survey, surveyUrl: `/survey/${token}` });
   });
 
+  app.get("/api/inspections/:id/nps-survey", requireAdmin, async (req: Request, res: Response) => {
+    const survey = await storage.getNpsSurveyByInspection(req.params.id);
+    if (!survey) return res.status(404).json({ message: "No NPS survey found" });
+
+    const isActive = new Date(survey.expiresAt) > new Date();
+    const fullUrl = `/survey/${survey.token}`;
+    res.json({ survey, surveyUrl: fullUrl, isActive });
+  });
+
+  app.post("/api/inspections/:id/reactivate-nps", requireAdmin, async (req: Request, res: Response) => {
+    const survey = await storage.getNpsSurveyByInspection(req.params.id);
+    if (!survey) return res.status(404).json({ message: "No NPS survey found" });
+
+    if (survey.completedAt) {
+      return res.status(400).json({ message: "Cannot reactivate a completed survey" });
+    }
+
+    if (new Date(survey.expiresAt) > new Date()) {
+      return res.status(400).json({ message: "Survey is still active" });
+    }
+
+    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await storage.updateNpsSurvey(survey.id, { expiresAt: newExpiresAt });
+
+    const fullUrl = `/survey/${survey.token}`;
+    console.log(`[NPS REACTIVATED] Inspection: ${req.params.id}, New Expiry: ${newExpiresAt.toISOString()}`);
+    res.json({ survey: { ...survey, expiresAt: newExpiresAt }, surveyUrl: fullUrl, isActive: true });
+  });
+
   app.get("/api/survey/:token", async (req: Request, res: Response) => {
     const survey = await storage.getNpsSurveyByToken(req.params.token);
     if (!survey) return res.status(404).json({ message: "Survey not found" });

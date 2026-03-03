@@ -293,7 +293,16 @@ export async function registerRoutes(
     }
     const data = parsed.data;
     const user = await storage.getUser(req.session.userId!);
-    const status = data.assignedServiceMemberId && data.inspectionDate ? "scheduled" : "new";
+    const hasAssignment = !!(data.assignedServiceMemberId && data.inspectionDate);
+    const status = hasAssignment ? "scheduled" : "new";
+
+    let assignmentStatus: string | null = null;
+    let assignmentExpiresAt: Date | null = null;
+    if (hasAssignment) {
+      assignmentStatus = "pending";
+      const expiryHours = data.isEmergency ? 12 : 24;
+      assignmentExpiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+    }
 
     const inspection = await storage.createInspection({
       companyName: data.companyName,
@@ -311,6 +320,8 @@ export async function registerRoutes(
       inspectionTime: data.inspectionTime || null,
       isEmergency: data.isEmergency,
       recurringDays: data.recurringDays || null,
+      assignmentStatus,
+      assignmentExpiresAt,
     });
 
     res.status(201).json(inspection);

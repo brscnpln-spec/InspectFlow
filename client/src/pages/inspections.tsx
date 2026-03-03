@@ -31,7 +31,11 @@ export default function InspectionsPage() {
     const matchSearch =
       i.companyName.toLowerCase().includes(search.toLowerCase()) ||
       i.contactPerson1.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || i.status === statusFilter;
+    const matchStatus =
+      statusFilter === "all" ? true :
+      statusFilter === "pending" ? i.assignmentStatus === "pending" :
+      statusFilter === "rejected" ? i.assignmentStatus === "rejected" :
+      i.status === statusFilter;
     const matchType = !i.isEmergency;
     return matchSearch && matchStatus && matchType;
   });
@@ -81,10 +85,12 @@ export default function InspectionsPage() {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="new">New</SelectItem>
+            <SelectItem value="pending">Pending Approval</SelectItem>
             <SelectItem value="scheduled">Scheduled</SelectItem>
             <SelectItem value="closed">Closed</SelectItem>
             <SelectItem value="final_closed">Final Closed</SelectItem>
             <SelectItem value="canceled">Canceled</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -70,6 +70,9 @@ export default function InspectionDetailPage() {
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [surveyUrl, setSurveyUrl] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [reportReviewed, setReportReviewed] = useState(false);
+  const [reportViewDialogOpen, setReportViewDialogOpen] = useState(false);
+  const [viewingReportId, setViewingReportId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     contactPerson1: "",
     contactPerson2: "",
@@ -147,14 +150,20 @@ export default function InspectionDetailPage() {
 
   const finalCloseMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("PATCH", `/api/inspections/${params?.id}/final-close`, {
+      const res = await apiRequest("PATCH", `/api/inspections/${params?.id}/final-close`, {
         adminNotes,
       });
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { npsSurveyUrl?: string }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+      setReportViewDialogOpen(false);
       toast({ title: "Inspection finalized" });
+      if (data.npsSurveyUrl) {
+        const fullUrl = `${window.location.origin}${data.npsSurveyUrl}`;
+        setSurveyUrl(fullUrl);
+      }
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -546,109 +555,147 @@ export default function InspectionDetailPage() {
             )}
 
             {isAdmin && inspection.status === "closed" && (
-              <>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-final-close">
-                      <CheckCircle2 className="w-4 h-4 mr-1" />
-                      Final Close
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Final Close Inspection</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 pt-4">
+              <Button size="sm" data-testid="button-final-close" onClick={() => { setReportReviewed(false); setAdminNotes(""); setReportViewDialogOpen(true); }}>
+                <CheckCircle2 className="w-4 h-4 mr-1" />
+                Final Close
+              </Button>
+            )}
+
+            <Dialog open={reportViewDialogOpen} onOpenChange={(open) => { if (!open) setReportViewDialogOpen(false); }}>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Review Report Before Final Close</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  {!reportReviewed ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        You must review the inspection report before proceeding. Click on a report to view it, then confirm you have read it.
+                      </p>
+                      <div className="space-y-2">
+                        {reports.map((report) => (
+                          <div
+                            key={report.id}
+                            className={`flex items-center justify-between gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${viewingReportId === report.id ? "border-[#ffb800] bg-[#ffb800]/5" : "hover:bg-muted/50"}`}
+                            onClick={() => {
+                              setViewingReportId(report.id);
+                              window.open(`/api/reports/${report.id}/download`, "_blank");
+                            }}
+                            data-testid={`review-report-${report.id}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded bg-[#ffb800]/10 flex items-center justify-center flex-shrink-0">
+                                <File className="w-4 h-4 text-[#ffb800]" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{report.originalName}</p>
+                                <p className="text-xs text-muted-foreground">{formatFileSize(report.fileSize)}</p>
+                              </div>
+                            </div>
+                            <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                      {reports.length === 0 && (
+                        <p className="text-sm text-red-500 text-center py-4">No reports uploaded for this inspection.</p>
+                      )}
+                      <Button
+                        className="w-full"
+                        onClick={() => setReportReviewed(true)}
+                        disabled={!viewingReportId}
+                        data-testid="button-report-reviewed"
+                      >
+                        <Check className="w-4 h-4 mr-1" />
+                        I Have Read the Report
+                      </Button>
+                      {!viewingReportId && reports.length > 0 && (
+                        <p className="text-xs text-muted-foreground text-center">Click on a report above to open and review it first</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <p className="text-sm text-green-700 dark:text-green-400">Report reviewed</p>
+                      </div>
                       <div>
-                        <label className="text-sm font-medium mb-1.5 block">Admin Notes</label>
+                        <label className="text-sm font-medium mb-1.5 block">Admin Notes *</label>
                         <Textarea
                           value={adminNotes}
                           onChange={(e) => setAdminNotes(e.target.value)}
-                          placeholder="Additional comments..."
+                          placeholder="Write your notes about the inspection report..."
                           className="resize-none"
                           rows={4}
                           data-testid="input-admin-notes"
                         />
+                        <p className="text-xs text-muted-foreground mt-1">Admin notes are required to finalize the inspection.</p>
                       </div>
                       <Button
                         className="w-full"
                         onClick={() => finalCloseMutation.mutate()}
-                        disabled={finalCloseMutation.isPending}
+                        disabled={finalCloseMutation.isPending || !adminNotes.trim()}
                         data-testid="button-confirm-final-close"
                       >
                         {finalCloseMutation.isPending ? (
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : null}
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                        )}
                         Confirm Final Close
                       </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => npsMutation.mutate()}
-                  disabled={npsMutation.isPending}
-                  data-testid="button-trigger-nps"
-                >
-                  {npsMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                  ) : (
-                    <Send className="w-4 h-4 mr-1" />
+                    </>
                   )}
-                  Send NPS Survey
-                </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
-                <Dialog open={!!surveyUrl} onOpenChange={(open) => !open && setSurveyUrl(null)}>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <Link className="w-5 h-5 text-[#ffb800]" />
-                        NPS Survey Link
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        Share this link with the customer. The survey is valid for 24 hours.
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          readOnly
-                          value={surveyUrl || ""}
-                          className="text-sm font-mono"
-                          data-testid="input-survey-url"
-                          onClick={(e) => (e.target as HTMLInputElement).select()}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          data-testid="button-copy-survey-url"
-                          onClick={() => {
-                            if (surveyUrl) {
-                              navigator.clipboard.writeText(surveyUrl);
-                              toast({ title: "Link copied to clipboard" });
-                            }
-                          }}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        data-testid="button-open-survey"
-                        onClick={() => window.open(surveyUrl!, "_blank")}
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Open Survey in New Tab
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </>
-            )}
+            <Dialog open={!!surveyUrl} onOpenChange={(open) => !open && setSurveyUrl(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Link className="w-5 h-5 text-[#ffb800]" />
+                    NPS Survey Link
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <p className="text-sm text-muted-foreground">
+                    An NPS survey has been created and sent along with the final close notification. Share this link with the customer if needed. Valid for 24 hours.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={surveyUrl || ""}
+                      className="text-sm font-mono"
+                      data-testid="input-survey-url"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="button-copy-survey-url"
+                      onClick={() => {
+                        if (surveyUrl) {
+                          navigator.clipboard.writeText(surveyUrl);
+                          toast({ title: "Link copied to clipboard" });
+                        }
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    data-testid="button-open-survey"
+                    onClick={() => window.open(surveyUrl!, "_blank")}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Open Survey in New Tab
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {isAdmin && inspection.status !== "closed" && inspection.status !== "final_closed" && (
               <Button

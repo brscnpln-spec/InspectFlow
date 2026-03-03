@@ -499,11 +499,53 @@ export async function registerRoutes(
 
   app.patch("/api/inspections/:id/final-close", requireAdmin, async (req: Request, res: Response) => {
     const { adminNotes } = req.body;
+
+    if (!adminNotes || !adminNotes.trim()) {
+      return res.status(400).json({ message: "Admin notes are required for final close" });
+    }
+
+    const existing = await storage.getInspection(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Not found" });
+
+    if (existing.status !== "closed") {
+      return res.status(400).json({ message: "Inspection must be closed before final close" });
+    }
+
+    const reports = await storage.getReportsByInspection(req.params.id);
+    if (reports.length === 0) {
+      return res.status(400).json({ message: "No reports found for this inspection" });
+    }
+
     const inspection = await storage.updateInspection(req.params.id, {
       status: "final_closed",
-      adminNotes: adminNotes || null,
+      adminNotes: adminNotes.trim(),
     });
-    res.json(inspection);
+
+    let npsSurveyUrl = "";
+    const existingSurvey = await storage.getNpsSurveyByInspection(req.params.id);
+    if (!existingSurvey) {
+      const token = randomUUID();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.createNpsSurvey({
+        inspectionId: req.params.id,
+        token,
+        expiresAt,
+      });
+      npsSurveyUrl = `/survey/${token}`;
+    } else {
+      npsSurveyUrl = `/survey/${existingSurvey.token}`;
+    }
+
+    const reportNames = reports.map(r => r.originalName).join(", ");
+    console.log(`[EMAIL NOTIFICATION] Final Close - To: ${existing.email1}${existing.email2 ? `, ${existing.email2}` : ""}`);
+    console.log(`  Company: ${existing.companyName}`);
+    console.log(`  Inspection Date: ${existing.inspectionDate} ${existing.inspectionTime || ""}`);
+    console.log(`  Service Member: ${existing.assignedServiceMemberId}`);
+    console.log(`  Reports: ${reportNames}`);
+    console.log(`  Admin Notes: ${adminNotes.trim()}`);
+    console.log(`  NPS Survey: ${npsSurveyUrl}`);
+
+    res.json({ ...inspection, npsSurveyUrl });
   });
 
   app.patch("/api/inspections/:id/cancel", requireAdmin, async (req: Request, res: Response) => {

@@ -41,6 +41,8 @@ import {
   Copy,
   Link,
   ExternalLink,
+  Check,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -150,6 +152,34 @@ export default function InspectionDetailPage() {
       const fullUrl = `${window.location.origin}${data.surveyUrl}`;
       setSurveyUrl(fullUrl);
       toast({ title: "NPS survey created successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const acceptAssignmentMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/inspections/${params?.id}/accept-assignment`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+      toast({ title: "Inspection accepted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const rejectAssignmentMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/inspections/${params?.id}/reject-assignment`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+      toast({ title: "Inspection rejected" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -571,6 +601,73 @@ export default function InspectionDetailPage() {
             )}
           </div>
         </div>
+
+        {!isAdmin && inspection.assignmentStatus === "pending" && (
+          <Card className="border-[#ffb800] border-2 bg-[#ffb800]/5">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="font-semibold text-sm flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-[#ffb800]" />
+                    Assignment Pending Your Response
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Please accept or reject this inspection assignment.
+                    {inspection.assignmentExpiresAt && (
+                      <> Expires: {new Date(inspection.assignmentExpiresAt).toLocaleString()}</>
+                    )}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => acceptAssignmentMutation.mutate()}
+                    disabled={acceptAssignmentMutation.isPending || rejectAssignmentMutation.isPending}
+                    data-testid="button-accept-assignment"
+                  >
+                    {acceptAssignmentMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    ) : (
+                      <Check className="w-4 h-4 mr-1" />
+                    )}
+                    Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => rejectAssignmentMutation.mutate()}
+                    disabled={acceptAssignmentMutation.isPending || rejectAssignmentMutation.isPending}
+                    data-testid="button-reject-assignment"
+                  >
+                    {rejectAssignmentMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    ) : (
+                      <X className="w-4 h-4 mr-1" />
+                    )}
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isAdmin && inspection.assignmentStatus === "pending" && (
+          <Card className="border-[#ffb800] bg-[#ffb800]/5">
+            <CardContent className="p-4">
+              <p className="text-sm flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-[#ffb800]" />
+                <span className="font-medium">Waiting for service member response</span>
+                {inspection.assignmentExpiresAt && (
+                  <span className="text-xs text-muted-foreground ml-1">
+                    (expires {new Date(inspection.assignmentExpiresAt).toLocaleString()})
+                  </span>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>

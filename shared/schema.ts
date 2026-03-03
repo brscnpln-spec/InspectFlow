@@ -5,6 +5,7 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "service_member"]);
 export const inspectionStatusEnum = pgEnum("inspection_status", ["new", "scheduled", "closed", "final_closed", "canceled"]);
+export const assignmentStatusEnum = pgEnum("assignment_status", ["pending", "accepted", "rejected", "expired"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -36,6 +37,9 @@ export const inspectionRequests = pgTable("inspection_requests", {
   adminNotes: text("admin_notes"),
   isEmergency: boolean("is_emergency").default(false),
   recurringDays: integer("recurring_days"),
+  assignmentStatus: assignmentStatusEnum("assignment_status"),
+  assignmentExpiresAt: timestamp("assignment_expires_at"),
+  assignmentRespondedAt: timestamp("assignment_responded_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

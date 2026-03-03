@@ -109,6 +109,24 @@ export async function registerRoutes(
   await pushSchema();
   await seedDatabase();
 
+  setInterval(async () => {
+    try {
+      const expired = await storage.getPendingExpiredAssignments();
+      for (const inspection of expired) {
+        await storage.updateInspection(inspection.id, {
+          assignmentStatus: "expired",
+          status: "new",
+          assignedServiceMemberId: null,
+          inspectionDate: null,
+          inspectionTime: null,
+        });
+        console.log(`Assignment expired for inspection ${inspection.id} (${inspection.companyName})`);
+      }
+    } catch (e) {
+      console.error("Error checking expired assignments:", e);
+    }
+  }, 60 * 1000);
+
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -305,15 +323,70 @@ export async function registerRoutes(
     }
     const { assignedServiceMemberId, inspectionDate, inspectionTime } = parsed.data;
 
+    const existingInspection = await storage.getInspection(req.params.id);
+    if (!existingInspection) return res.status(404).json({ message: "Not found" });
+
+    const isEmergency = existingInspection.isEmergency;
+    const expiryHours = isEmergency ? 12 : 24;
+    const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+
     const inspection = await storage.updateInspection(req.params.id, {
       assignedServiceMemberId,
       inspectionDate,
       inspectionTime: inspectionTime || null,
       assignedByAdminId: req.session.userId!,
       status: "scheduled",
+      assignmentStatus: "pending",
+      assignmentExpiresAt: expiresAt,
+      assignmentRespondedAt: null,
     });
 
     res.json(inspection);
+  });
+
+  app.patch("/api/inspections/:id/accept-assignment", requireAuth, async (req: Request, res: Response) => {
+    const inspection = await storage.getInspection(req.params.id);
+    if (!inspection) return res.status(404).json({ message: "Not found" });
+
+    if (inspection.assignedServiceMemberId !== req.session.userId) {
+      return res.status(403).json({ message: "You are not assigned to this inspection" });
+    }
+    if (inspection.assignmentStatus !== "pending") {
+      return res.status(400).json({ message: "Assignment is not pending" });
+    }
+    if (inspection.assignmentExpiresAt && inspection.assignmentExpiresAt < new Date()) {
+      return res.status(400).json({ message: "Assignment has expired" });
+    }
+
+    const updated = await storage.updateInspection(req.params.id, {
+      assignmentStatus: "accepted",
+      assignmentRespondedAt: new Date(),
+    });
+
+    res.json(updated);
+  });
+
+  app.patch("/api/inspections/:id/reject-assignment", requireAuth, async (req: Request, res: Response) => {
+    const inspection = await storage.getInspection(req.params.id);
+    if (!inspection) return res.status(404).json({ message: "Not found" });
+
+    if (inspection.assignedServiceMemberId !== req.session.userId) {
+      return res.status(403).json({ message: "You are not assigned to this inspection" });
+    }
+    if (inspection.assignmentStatus !== "pending") {
+      return res.status(400).json({ message: "Assignment is not pending" });
+    }
+
+    const updated = await storage.updateInspection(req.params.id, {
+      assignmentStatus: "rejected",
+      assignmentRespondedAt: new Date(),
+      status: "new",
+      assignedServiceMemberId: null,
+      inspectionDate: null,
+      inspectionTime: null,
+    });
+
+    res.json(updated);
   });
 
   app.patch("/api/inspections/:id/close", requireAuth, async (req: Request, res: Response) => {
@@ -627,6 +700,18 @@ async function pushSchema() {
         );
       `);
     }
+
+    await dbPool.query(`
+      DO $$ BEGIN
+        CREATE TYPE assignment_status AS ENUM ('pending', 'accepted', 'rejected', 'expired');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await dbPool.query(`
+      ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS assignment_status assignment_status;
+      ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS assignment_expires_at TIMESTAMP;
+      ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS assignment_responded_at TIMESTAMP;
+    `);
 
     console.log("Database schema verified successfully");
   } catch (e: any) {

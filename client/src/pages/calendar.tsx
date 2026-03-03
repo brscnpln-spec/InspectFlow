@@ -222,6 +222,7 @@ export default function CalendarPage() {
                   <div className="space-y-1">
                     {dayInspections.slice(0, 3).map((insp) => {
                       const color = getColorForMember(insp.assignedServiceMemberId);
+                      const isPending = insp.assignmentStatus === "pending";
                       return (
                         <Link
                           key={insp.id}
@@ -229,12 +230,15 @@ export default function CalendarPage() {
                           data-testid={`calendar-event-${insp.id}`}
                         >
                           <div
-                            className={`${color.bg} ${color.text} border-l-2 ${color.border} rounded-r px-1.5 py-0.5 text-[10px] leading-tight cursor-pointer hover:opacity-80 transition-opacity truncate`}
+                            className={`${color.bg} ${color.text} border-l-2 ${color.border} rounded-r px-1.5 py-0.5 text-[10px] leading-tight cursor-pointer hover:opacity-80 transition-opacity truncate ${isPending ? "opacity-40 border-dashed" : ""}`}
                           >
-                            <div className="font-semibold truncate">{insp.companyName}</div>
+                            <div className="font-semibold truncate flex items-center gap-0.5">
+                              {isPending && <Clock className="w-2.5 h-2.5 flex-shrink-0" />}
+                              {insp.companyName}
+                            </div>
                             {isAdmin && (
                               <div className="truncate opacity-75">
-                                {getMemberName(insp.assignedServiceMemberId)}
+                                {isPending ? "⏳ " : ""}{getMemberName(insp.assignedServiceMemberId)}
                               </div>
                             )}
                             {insp.inspectionTime && (

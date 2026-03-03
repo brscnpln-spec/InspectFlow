@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
   users,
@@ -34,6 +34,7 @@ export interface IStorage {
   getInspection(id: string): Promise<InspectionRequest | undefined>;
   createInspection(data: Partial<InspectionRequest>): Promise<InspectionRequest>;
   updateInspection(id: string, data: Partial<InspectionRequest>): Promise<InspectionRequest | undefined>;
+  getPendingExpiredAssignments(): Promise<InspectionRequest[]>;
 
   createNpsSurvey(data: InsertNpsSurvey): Promise<NpsSurvey>;
   getNpsSurveyByToken(token: string): Promise<NpsSurvey | undefined>;
@@ -116,6 +117,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(inspectionRequests.id, id))
       .returning();
     return inspection;
+  }
+
+  async getPendingExpiredAssignments(): Promise<InspectionRequest[]> {
+    return db.select().from(inspectionRequests).where(
+      and(
+        eq(inspectionRequests.assignmentStatus, "pending"),
+        lt(inspectionRequests.assignmentExpiresAt, new Date())
+      )
+    );
   }
 
   async createNpsSurvey(data: InsertNpsSurvey): Promise<NpsSurvey> {

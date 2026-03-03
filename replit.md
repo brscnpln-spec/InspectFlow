@@ -43,7 +43,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 
 ## API Endpoints
 - POST /api/auth/login, GET /api/auth/me, POST /api/auth/logout
-- GET /api/inspections, GET /api/inspections/:id, POST /api/inspections
+- GET /api/inspections, GET /api/inspections/:id, POST /api/inspections, PATCH /api/inspections/:id (admin edit)
 - PATCH /api/inspections/:id/assign, /close, /final-close, /cancel, /accept-assignment, /reject-assignment
 - POST /api/inspections/:id/trigger-nps
 - GET /api/survey/:token, POST /api/survey/:token/respond

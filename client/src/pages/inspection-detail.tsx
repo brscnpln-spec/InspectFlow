@@ -48,7 +48,10 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { StatusBadge } from "./dashboard";
 import type { InspectionRequest, User, InspectionReport } from "@shared/schema";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Pencil } from "lucide-react";
 
 export default function InspectionDetailPage() {
   const [, params] = useRoute("/inspections/:id");
@@ -66,6 +69,21 @@ export default function InspectionDetailPage() {
   const completeFileInputRef = useRef<HTMLInputElement>(null);
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [surveyUrl, setSurveyUrl] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    contactPerson1: "",
+    contactPerson2: "",
+    phone1: "",
+    phone2: "",
+    email1: "",
+    email2: "",
+    notes: "",
+    isEmergency: false,
+    recurringDays: null as number | null,
+    assignedServiceMemberId: "",
+    inspectionDate: "",
+    inspectionTime: "",
+  });
 
   const { data: inspection, isLoading } = useQuery<InspectionRequest>({
     queryKey: ["/api/inspections", params?.id],
@@ -199,6 +217,50 @@ export default function InspectionDetailPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/inspections/${params?.id}`, {
+        ...editForm,
+        contactPerson2: editForm.contactPerson2 || null,
+        phone2: editForm.phone2 || null,
+        email2: editForm.email2 || null,
+        notes: editForm.notes || null,
+        recurringDays: editForm.recurringDays || null,
+        assignedServiceMemberId: editForm.assignedServiceMemberId || null,
+        inspectionDate: editForm.inspectionDate || null,
+        inspectionTime: editForm.inspectionTime || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections", params?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+      setEditDialogOpen(false);
+      toast({ title: "Inspection updated successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const openEditDialog = () => {
+    if (!inspection) return;
+    setEditForm({
+      contactPerson1: inspection.contactPerson1 || "",
+      contactPerson2: inspection.contactPerson2 || "",
+      phone1: inspection.phone1 || "",
+      phone2: inspection.phone2 || "",
+      email1: inspection.email1 || "",
+      email2: inspection.email2 || "",
+      notes: inspection.notes || "",
+      isEmergency: inspection.isEmergency || false,
+      recurringDays: inspection.recurringDays || null,
+      assignedServiceMemberId: inspection.assignedServiceMemberId || "",
+      inspectionDate: inspection.inspectionDate || "",
+      inspectionTime: inspection.inspectionTime || "",
+    });
+    setEditDialogOpen(true);
+  };
 
   const handleFileUpload = async (file: File) => {
     setUploading(true);
@@ -588,6 +650,18 @@ export default function InspectionDetailPage() {
               </>
             )}
 
+            {isAdmin && inspection.status !== "closed" && inspection.status !== "final_closed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openEditDialog}
+                data-testid="button-edit-inspection"
+              >
+                <Pencil className="w-4 h-4 mr-1" />
+                Edit
+              </Button>
+            )}
+
             {isAdmin && (inspection.status === "new" || inspection.status === "scheduled") && (
               <Button
                 variant="outline"
@@ -601,6 +675,182 @@ export default function InspectionDetailPage() {
             )}
           </div>
         </div>
+
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Inspection</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-contact1">Contact Person 1 *</Label>
+                  <Input
+                    id="edit-contact1"
+                    value={editForm.contactPerson1}
+                    onChange={(e) => setEditForm({ ...editForm, contactPerson1: e.target.value })}
+                    data-testid="input-edit-contact1"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-contact2">Contact Person 2</Label>
+                  <Input
+                    id="edit-contact2"
+                    value={editForm.contactPerson2}
+                    onChange={(e) => setEditForm({ ...editForm, contactPerson2: e.target.value })}
+                    data-testid="input-edit-contact2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-phone1">Phone 1 *</Label>
+                  <Input
+                    id="edit-phone1"
+                    value={editForm.phone1}
+                    onChange={(e) => setEditForm({ ...editForm, phone1: e.target.value })}
+                    data-testid="input-edit-phone1"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-phone2">Phone 2</Label>
+                  <Input
+                    id="edit-phone2"
+                    value={editForm.phone2}
+                    onChange={(e) => setEditForm({ ...editForm, phone2: e.target.value })}
+                    data-testid="input-edit-phone2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-email1">Email 1 *</Label>
+                  <Input
+                    id="edit-email1"
+                    type="email"
+                    value={editForm.email1}
+                    onChange={(e) => setEditForm({ ...editForm, email1: e.target.value })}
+                    data-testid="input-edit-email1"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-email2">Email 2</Label>
+                  <Input
+                    id="edit-email2"
+                    type="email"
+                    value={editForm.email2}
+                    onChange={(e) => setEditForm({ ...editForm, email2: e.target.value })}
+                    data-testid="input-edit-email2"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-member">Service Member</Label>
+                <Select
+                  value={editForm.assignedServiceMemberId}
+                  onValueChange={(val) => setEditForm({ ...editForm, assignedServiceMemberId: val === "none" ? "" : val })}
+                >
+                  <SelectTrigger data-testid="select-edit-member">
+                    <SelectValue placeholder="Select a service member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {editForm.assignedServiceMemberId && editForm.assignedServiceMemberId !== inspection?.assignedServiceMemberId && (
+                  <p className="text-xs text-[#ffb800] flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Changing service member will reset assignment to pending and notify the new member
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-date">Inspection Date</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={editForm.inspectionDate}
+                    onChange={(e) => setEditForm({ ...editForm, inspectionDate: e.target.value })}
+                    data-testid="input-edit-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-time">Inspection Time</Label>
+                  <Input
+                    id="edit-time"
+                    type="time"
+                    value={editForm.inspectionTime}
+                    onChange={(e) => setEditForm({ ...editForm, inspectionTime: e.target.value })}
+                    data-testid="input-edit-time"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="edit-emergency"
+                    checked={editForm.isEmergency}
+                    onCheckedChange={(val) => setEditForm({ ...editForm, isEmergency: val })}
+                    data-testid="switch-edit-emergency"
+                  />
+                  <Label htmlFor="edit-emergency">Emergency</Label>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-recurring">Recurring (days)</Label>
+                  <Input
+                    id="edit-recurring"
+                    type="number"
+                    min={0}
+                    value={editForm.recurringDays ?? ""}
+                    onChange={(e) => setEditForm({ ...editForm, recurringDays: e.target.value ? parseInt(e.target.value) : null })}
+                    placeholder="e.g. 30, 45, 60"
+                    data-testid="input-edit-recurring"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                  data-testid="input-edit-notes"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDialogOpen(false)}
+                  data-testid="button-edit-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => editMutation.mutate()}
+                  disabled={editMutation.isPending || !editForm.contactPerson1 || !editForm.phone1 || !editForm.email1}
+                  data-testid="button-edit-save"
+                >
+                  {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {!isAdmin && inspection.assignmentStatus === "pending" && (
           <Card className="border-[#ffb800] border-2 bg-[#ffb800]/5">

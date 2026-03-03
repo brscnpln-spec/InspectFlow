@@ -11,7 +11,7 @@ import { randomUUID } from "crypto";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { z } from "zod";
-import { loginSchema } from "@shared/schema";
+import { loginSchema, type InspectionRequest } from "@shared/schema";
 
 const uploadsDir = path.join("/tmp", "inspection-uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -39,6 +39,21 @@ const createInspectionSchema = z.object({
   email2: z.string().email().optional().nullable().or(z.literal("")),
   notes: z.string().optional().nullable(),
   isEmergency: z.boolean().optional().default(false),
+  recurringDays: z.number().optional().nullable(),
+  assignedServiceMemberId: z.string().optional().nullable(),
+  inspectionDate: z.string().optional().nullable(),
+  inspectionTime: z.string().optional().nullable(),
+});
+
+const editInspectionSchema = z.object({
+  contactPerson1: z.string().min(1),
+  contactPerson2: z.string().optional().nullable(),
+  phone1: z.string().min(1),
+  phone2: z.string().optional().nullable(),
+  email1: z.string().email(),
+  email2: z.string().email().optional().nullable().or(z.literal("")),
+  notes: z.string().optional().nullable(),
+  isEmergency: z.boolean(),
   recurringDays: z.number().optional().nullable(),
   assignedServiceMemberId: z.string().optional().nullable(),
   inspectionDate: z.string().optional().nullable(),
@@ -325,6 +340,64 @@ export async function registerRoutes(
     });
 
     res.status(201).json(inspection);
+  });
+
+  app.patch("/api/inspections/:id", requireAdmin, async (req: Request, res: Response) => {
+    const parsed = editInspectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
+    }
+
+    const existing = await storage.getInspection(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Not found" });
+
+    if (existing.status === "closed" || existing.status === "final_closed") {
+      return res.status(400).json({ message: "Cannot edit a closed inspection" });
+    }
+
+    const data = parsed.data;
+    const serviceMemberChanged = data.assignedServiceMemberId !== existing.assignedServiceMemberId;
+
+    const updateData: Partial<InspectionRequest> = {
+      contactPerson1: data.contactPerson1,
+      contactPerson2: data.contactPerson2 || null,
+      phone1: data.phone1,
+      phone2: data.phone2 || null,
+      email1: data.email1,
+      email2: data.email2 || null,
+      notes: data.notes || null,
+      isEmergency: data.isEmergency,
+      recurringDays: data.recurringDays || null,
+      inspectionDate: data.inspectionDate || null,
+      inspectionTime: data.inspectionTime || null,
+    };
+
+    if (serviceMemberChanged) {
+      updateData.assignedServiceMemberId = data.assignedServiceMemberId || null;
+      if (data.assignedServiceMemberId && data.inspectionDate) {
+        updateData.status = "scheduled";
+        updateData.assignmentStatus = "pending";
+        const expiryHours = data.isEmergency ? 12 : 24;
+        updateData.assignmentExpiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+        updateData.assignmentRespondedAt = null;
+      } else if (!data.assignedServiceMemberId) {
+        updateData.status = "new";
+        updateData.assignmentStatus = null;
+        updateData.assignmentExpiresAt = null;
+        updateData.assignmentRespondedAt = null;
+      }
+    }
+
+    const inspection = await storage.updateInspection(req.params.id, updateData);
+
+    if (serviceMemberChanged && data.assignedServiceMemberId) {
+      const newMember = await storage.getUser(data.assignedServiceMemberId);
+      if (newMember) {
+        console.log(`[EMAIL NOTIFICATION] New assignment for ${newMember.name} (${newMember.email}): Inspection ${existing.companyName} has been assigned to you.`);
+      }
+    }
+
+    res.json(inspection);
   });
 
   app.patch("/api/inspections/:id/assign", requireAdmin, async (req: Request, res: Response) => {

@@ -250,9 +250,9 @@ export default function InspectionDetailPage() {
     mutationFn: async () => {
       return apiRequest("PATCH", `/api/inspections/${params?.id}`, {
         ...editForm,
-        contactPerson2: editForm.contactPerson2 || null,
-        phone2: editForm.phone2 || null,
-        email2: editForm.email2 || null,
+        contactPerson2: editForm.contactPerson2,
+        phone2: editForm.phone2,
+        email2: editForm.email2,
         notes: editForm.notes || null,
         recurringDays: editForm.recurringDays || null,
         assignedServiceMemberId: editForm.assignedServiceMemberId || null,
@@ -806,7 +806,7 @@ export default function InspectionDetailPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="edit-contact2">Contact Person 2</Label>
+                  <Label htmlFor="edit-contact2">Contact Person 2 *</Label>
                   <Input
                     id="edit-contact2"
                     value={editForm.contactPerson2}
@@ -827,7 +827,7 @@ export default function InspectionDetailPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="edit-phone2">Phone 2</Label>
+                  <Label htmlFor="edit-phone2">Phone 2 *</Label>
                   <Input
                     id="edit-phone2"
                     value={editForm.phone2}
@@ -849,7 +849,7 @@ export default function InspectionDetailPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="edit-email2">Email 2</Label>
+                  <Label htmlFor="edit-email2">Email 2 *</Label>
                   <Input
                     id="edit-email2"
                     type="email"
@@ -954,7 +954,15 @@ export default function InspectionDetailPage() {
                 </Button>
                 <Button
                   onClick={() => editMutation.mutate()}
-                  disabled={editMutation.isPending || !editForm.contactPerson1 || !editForm.phone1 || !editForm.email1}
+                  disabled={
+                    editMutation.isPending ||
+                    !editForm.contactPerson1.trim() ||
+                    !editForm.contactPerson2.trim() ||
+                    !editForm.phone1.trim() ||
+                    !editForm.phone2.trim() ||
+                    !editForm.email1.trim() ||
+                    !editForm.email2.trim()
+                  }
                   data-testid="button-edit-save"
                 >
                   {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
@@ -1043,9 +1051,7 @@ export default function InspectionDetailPage() {
             <CardContent className="space-y-3">
               <InfoRow label="Company" value={inspection.companyName} />
               <InfoRow label="Contact 1" value={inspection.contactPerson1} />
-              {inspection.contactPerson2 && (
-                <InfoRow label="Contact 2" value={inspection.contactPerson2} />
-              )}
+              <InfoRow label="Contact 2" value={inspection.contactPerson2 || "Not provided"} />
             </CardContent>
           </Card>
 
@@ -1058,11 +1064,9 @@ export default function InspectionDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <InfoRow label="Phone 1" value={inspection.phone1} />
-              {inspection.phone2 && <InfoRow label="Phone 2" value={inspection.phone2} />}
+              <InfoRow label="Phone 2" value={inspection.phone2 || "Not provided"} />
               <InfoRow label="Email 1" value={inspection.email1} icon={<Mail className="w-3 h-3" />} />
-              {inspection.email2 && (
-                <InfoRow label="Email 2" value={inspection.email2} icon={<Mail className="w-3 h-3" />} />
-              )}
+              <InfoRow label="Email 2" value={inspection.email2 || "Not provided"} icon={<Mail className="w-3 h-3" />} />
             </CardContent>
           </Card>
 

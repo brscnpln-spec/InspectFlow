@@ -22,7 +22,9 @@ interface SurveyData {
     companyName: string;
     inspectionDate: string;
     contactPerson1: string;
+    contactPerson2: string;
     email1: string;
+    email2: string;
   };
   serviceMember: {
     id: string;
@@ -142,11 +144,15 @@ export default function NpsSurveyPage() {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <UserIcon className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
-              <span data-testid="text-survey-contact">{survey.inspection.contactPerson1}</span>
+              <span data-testid="text-survey-contact">
+                {survey.inspection.contactPerson1} · {survey.inspection.contactPerson2 || "Not provided"}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Mail className="w-4 h-4 text-[#ffb800] flex-shrink-0" />
-              <span data-testid="text-survey-email">{survey.inspection.email1}</span>
+              <span data-testid="text-survey-email">
+                {survey.inspection.email1} · {survey.inspection.email2 || "Not provided"}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <UserIcon className="w-4 h-4 text-[#ffb800] flex-shrink-0" />

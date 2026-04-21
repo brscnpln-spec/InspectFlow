@@ -61,7 +61,7 @@ export default function EmergencyPage() {
                         <Badge variant="destructive" className="text-[10px]">Emergency</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {inspection.contactPerson1}
+                        Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
                         {inspection.inspectionDate && ` · ${inspection.inspectionDate}`}
                       </p>
                     </div>

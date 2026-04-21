@@ -32,12 +32,12 @@ import type { User } from "@shared/schema";
 
 const inspectionFormSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
-  contactPerson1: z.string().min(1, "At least one contact person is required"),
-  contactPerson2: z.string().optional(),
-  phone1: z.string().min(1, "Phone number is required"),
-  phone2: z.string().optional(),
+  contactPerson1: z.string().trim().min(1, "Contact person 1 is required"),
+  contactPerson2: z.string().trim().min(1, "Contact person 2 is required"),
+  phone1: z.string().trim().min(1, "Phone 1 is required"),
+  phone2: z.string().trim().min(1, "Phone 2 is required"),
   email1: z.string().email("Valid email is required"),
-  email2: z.string().email("Valid email is required").optional().or(z.literal("")),
+  email2: z.string().email("Valid email is required"),
   notes: z.string().optional(),
   isEmergency: z.boolean().default(false),
   recurringDays: z.number().optional(),
@@ -132,7 +132,7 @@ export default function InspectionFormPage() {
                     name="contactPerson1"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contact Person 1</FormLabel>
+                        <FormLabel>Contact Person 1 *</FormLabel>
                         <FormControl>
                           <Input placeholder="Primary contact" {...field} data-testid="input-contact-1" />
                         </FormControl>
@@ -145,9 +145,9 @@ export default function InspectionFormPage() {
                     name="contactPerson2"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contact Person 2</FormLabel>
+                        <FormLabel>Contact Person 2 *</FormLabel>
                         <FormControl>
-                          <Input placeholder="Secondary contact (optional)" {...field} data-testid="input-contact-2" />
+                          <Input placeholder="Secondary contact" {...field} data-testid="input-contact-2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -161,7 +161,7 @@ export default function InspectionFormPage() {
                     name="phone1"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone 1</FormLabel>
+                        <FormLabel>Phone 1 *</FormLabel>
                         <FormControl>
                           <Input placeholder="+1 234 567 890" {...field} data-testid="input-phone-1" />
                         </FormControl>
@@ -174,9 +174,9 @@ export default function InspectionFormPage() {
                     name="phone2"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone 2</FormLabel>
+                        <FormLabel>Phone 2 *</FormLabel>
                         <FormControl>
-                          <Input placeholder="Optional" {...field} data-testid="input-phone-2" />
+                          <Input placeholder="+1 234 567 891" {...field} data-testid="input-phone-2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -190,7 +190,7 @@ export default function InspectionFormPage() {
                     name="email1"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email 1</FormLabel>
+                        <FormLabel>Email 1 *</FormLabel>
                         <FormControl>
                           <Input placeholder="primary@company.com" {...field} data-testid="input-email-1" />
                         </FormControl>
@@ -203,7 +203,7 @@ export default function InspectionFormPage() {
                     name="email2"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email 2</FormLabel>
+                        <FormLabel>Email 2 *</FormLabel>
                         <FormControl>
                           <Input placeholder="secondary@company.com" {...field} data-testid="input-email-2" />
                         </FormControl>

@@ -175,7 +175,7 @@ export default function DashboardPage() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {inspection.contactPerson1}
+                        Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
                         {inspection.inspectionDate &&
                           ` · ${inspection.inspectionDate}`}
                       </p>

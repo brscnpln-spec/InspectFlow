@@ -31,12 +31,12 @@ const upload = multer({
 
 const createInspectionSchema = z.object({
   companyName: z.string().min(1),
-  contactPerson1: z.string().min(1),
-  contactPerson2: z.string().optional().nullable(),
-  phone1: z.string().min(1),
-  phone2: z.string().optional().nullable(),
-  email1: z.string().email(),
-  email2: z.string().email().optional().nullable().or(z.literal("")),
+  contactPerson1: z.string().trim().min(1),
+  contactPerson2: z.string().trim().min(1),
+  phone1: z.string().trim().min(1),
+  phone2: z.string().trim().min(1),
+  email1: z.string().trim().email(),
+  email2: z.string().trim().email(),
   notes: z.string().optional().nullable(),
   isEmergency: z.boolean().optional().default(false),
   recurringDays: z.number().optional().nullable(),
@@ -46,12 +46,12 @@ const createInspectionSchema = z.object({
 });
 
 const editInspectionSchema = z.object({
-  contactPerson1: z.string().min(1),
-  contactPerson2: z.string().optional().nullable(),
-  phone1: z.string().min(1),
-  phone2: z.string().optional().nullable(),
-  email1: z.string().email(),
-  email2: z.string().email().optional().nullable().or(z.literal("")),
+  contactPerson1: z.string().trim().min(1),
+  contactPerson2: z.string().trim().min(1),
+  phone1: z.string().trim().min(1),
+  phone2: z.string().trim().min(1),
+  email1: z.string().trim().email(),
+  email2: z.string().trim().email(),
   notes: z.string().optional().nullable(),
   isEmergency: z.boolean(),
   recurringDays: z.number().optional().nullable(),
@@ -322,11 +322,11 @@ export async function registerRoutes(
     const inspection = await storage.createInspection({
       companyName: data.companyName,
       contactPerson1: data.contactPerson1,
-      contactPerson2: data.contactPerson2 || null,
+      contactPerson2: data.contactPerson2,
       phone1: data.phone1,
-      phone2: data.phone2 || null,
+      phone2: data.phone2,
       email1: data.email1,
-      email2: data.email2 || null,
+      email2: data.email2,
       notes: data.notes || null,
       status,
       assignedServiceMemberId: data.assignedServiceMemberId || null,
@@ -360,11 +360,11 @@ export async function registerRoutes(
 
     const updateData: Partial<InspectionRequest> = {
       contactPerson1: data.contactPerson1,
-      contactPerson2: data.contactPerson2 || null,
+      contactPerson2: data.contactPerson2,
       phone1: data.phone1,
-      phone2: data.phone2 || null,
+      phone2: data.phone2,
       email1: data.email1,
-      email2: data.email2 || null,
+      email2: data.email2,
       notes: data.notes || null,
       isEmergency: data.isEmergency,
       recurringDays: data.recurringDays || null,
@@ -573,6 +573,11 @@ export async function registerRoutes(
       isManual: true,
     });
 
+    console.log(`[EMAIL NOTIFICATION] NPS Survey - To: ${inspection.email1}, ${inspection.email2}`);
+    console.log(`  Company: ${inspection.companyName}`);
+    console.log(`  Contacts: ${inspection.contactPerson1}, ${inspection.contactPerson2}`);
+    console.log(`  NPS Survey: /survey/${token}`);
+
     res.json({ survey, surveyUrl: `/survey/${token}` });
   });
 
@@ -628,7 +633,9 @@ export async function registerRoutes(
         companyName: inspection.companyName,
         inspectionDate: inspection.inspectionDate,
         contactPerson1: inspection.contactPerson1,
+        contactPerson2: inspection.contactPerson2,
         email1: inspection.email1,
+        email2: inspection.email2,
       },
       serviceMember: serviceMember || { id: "", name: "Unknown" },
       expired,

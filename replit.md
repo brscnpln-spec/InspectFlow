@@ -22,13 +22,14 @@ An internal workflow tool for managing OGI inspection requests from customer int
 ## Key Features
 1. Inspection request CRUD with status workflow (New → Scheduled → Closed → Final Closed)
 2. Service member assignment and scheduling with accept/reject workflow
-3. NPS survey system with 24-hour expiry, token-based URLs
+3. NPS survey system with 24-hour expiry, token-based URLs sent to both mandatory contact persons
 4. Analytics dashboard with NPS scores, distribution charts
 5. Emergency inspection tracking
 6. Team management view
 7. Calendar view - Monthly grid showing inspections; Admin sees all inspections color-coded by service member, Members see only their own; Pending assignments shown with reduced opacity and dashed border
 8. Inspection report file upload - Mandatory file upload before closing inspections; Admin sees all reports, service members see only their own uploads
 9. Assignment accept/reject workflow - Service members must accept/reject within 24h (12h for emergency); auto-expires if no response; pending assignments shown transparently in calendar
+10. Two mandatory contact persons per inspection - contact person 1 and 2 require name, phone, and email; both contacts are shown in inspection records and receive NPS/final close notification links
 
 ## Project Structure
 - `shared/schema.ts` - Database schema and types

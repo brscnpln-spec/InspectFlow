@@ -122,7 +122,9 @@ export default function MemberInspectionsPage() {
                             </div>
                             <div className="flex items-center gap-1 mt-1">
                               <Building2 className="w-3 h-3 text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground">{inspection.contactPerson1}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
                               <Calendar className="w-3 h-3 text-muted-foreground" />
@@ -201,7 +203,7 @@ export default function MemberInspectionsPage() {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-sm">{inspection.companyName}</h3>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {inspection.contactPerson1}
+                              Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
                             </p>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {inspection.inspectionDate}
@@ -232,7 +234,7 @@ export default function MemberInspectionsPage() {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-sm">{inspection.companyName}</h3>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {inspection.contactPerson1}
+                              Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
                             </p>
                           </div>
                           <StatusBadge status={inspection.status} />

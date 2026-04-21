@@ -30,7 +30,8 @@ export default function InspectionsPage() {
   const filtered = inspections.filter((i) => {
     const matchSearch =
       i.companyName.toLowerCase().includes(search.toLowerCase()) ||
-      i.contactPerson1.toLowerCase().includes(search.toLowerCase());
+      i.contactPerson1.toLowerCase().includes(search.toLowerCase()) ||
+      (i.contactPerson2 || "").toLowerCase().includes(search.toLowerCase());
     const matchStatus =
       statusFilter === "all" ? true :
       statusFilter === "pending" ? i.assignmentStatus === "pending" :
@@ -133,8 +134,7 @@ export default function InspectionsPage() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Contact: {inspection.contactPerson1}
-                        {inspection.contactPerson2 && `, ${inspection.contactPerson2}`}
+                        Contact 1: {inspection.contactPerson1} · Contact 2: {inspection.contactPerson2 || "Not provided"}
                       </p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
                         {inspection.inspectionDate && (

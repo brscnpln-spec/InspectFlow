@@ -25,6 +25,8 @@ import {
   Hash,
   Loader2,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -59,12 +61,15 @@ function validateForm(form: TenantForm): string | null {
   return null;
 }
 
+const PAGE_SIZE = 10;
+
 export default function TenantsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
 
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [form, setForm] = useState<TenantForm>(EMPTY_FORM);
@@ -127,6 +132,10 @@ export default function TenantsPage() {
       t.contactPerson1.toLowerCase().includes(search.toLowerCase()) ||
       t.contactPerson2.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const openCreate = () => {
     setEditingTenant(null);
@@ -202,7 +211,7 @@ export default function TenantsPage() {
           <Input
             placeholder="Search tenants..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9"
             data-testid="input-tenant-search"
           />
@@ -224,8 +233,9 @@ export default function TenantsPage() {
             </CardContent>
           </Card>
         ) : (
+          <>
           <div className="space-y-3">
-            {filtered.map((tenant) => (
+            {paginated.map((tenant) => (
               <Card key={tenant.id} data-testid={`card-tenant-${tenant.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -299,6 +309,48 @@ export default function TenantsPage() {
               </Card>
             ))}
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <p className="text-xs text-muted-foreground">
+                {filtered.length} tenant{filtered.length !== 1 ? "s" : ""} · Page {safePage} of {totalPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <Button
+                    key={p}
+                    variant={p === safePage ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 w-8 p-0 text-xs"
+                    onClick={() => setPage(p)}
+                    data-testid={`button-page-${p}`}
+                  >
+                    {p}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  data-testid="button-next-page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
@@ -320,11 +372,11 @@ export default function TenantsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>KLX *</Label>
-                    <Input placeholder="KLX-001" {...f("klx")} data-testid="input-tenant-klx" />
+                    <Input placeholder="KLX" {...f("klx")} data-testid="input-tenant-klx" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>KL Customer Number *</Label>
-                    <Input placeholder="CUS-00123" {...f("klCustomerNumber")} data-testid="input-tenant-klcn" />
+                    <Input placeholder="0010XXXXXX" {...f("klCustomerNumber")} data-testid="input-tenant-klcn" />
                   </div>
                 </div>
               </CardContent>

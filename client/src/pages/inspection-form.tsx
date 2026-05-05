@@ -25,10 +25,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, Building2, User as UserIcon, Phone, Mail, Hash } from "lucide-react";
+import { Loader2, ArrowLeft, Building2, User as UserIcon, Phone, Mail, Hash, ChevronsUpDown, Check } from "lucide-react";
 import type { User, Tenant } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const inspectionFormSchema = z.object({
   tenantId: z.string().min(1, "Please select a tenant"),
@@ -46,6 +60,7 @@ export default function InspectionFormPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [tenantOpen, setTenantOpen] = useState(false);
 
   const { data: teamMembers = [] } = useQuery<User[]>({
     queryKey: ["/api/users/service-members"],
@@ -123,27 +138,62 @@ export default function InspectionFormPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Tenant / Company *</FormLabel>
-                      <Select
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          handleTenantChange(val);
-                        }}
-                        value={field.value}
-                        disabled={tenantsLoading}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-tenant">
-                            <SelectValue placeholder={tenantsLoading ? "Loading tenants..." : "Select a tenant"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {tenants.map((tenant) => (
-                            <SelectItem key={tenant.id} value={tenant.id}>
-                              {tenant.companyName} — {tenant.klx}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={tenantOpen} onOpenChange={setTenantOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={tenantOpen}
+                              className={cn(
+                                "w-full justify-between font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              disabled={tenantsLoading}
+                              data-testid="select-tenant"
+                            >
+                              {tenantsLoading
+                                ? "Loading tenants..."
+                                : field.value
+                                ? (tenants.find((t) => t.id === field.value)?.companyName ?? "Select a tenant")
+                                : "Select a tenant"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search tenant..." />
+                            <CommandList>
+                              <CommandEmpty>No tenant found.</CommandEmpty>
+                              <CommandGroup>
+                                {tenants.map((tenant) => (
+                                  <CommandItem
+                                    key={tenant.id}
+                                    value={`${tenant.companyName} ${tenant.klx} ${tenant.klCustomerNumber}`}
+                                    onSelect={() => {
+                                      field.onChange(tenant.id);
+                                      handleTenantChange(tenant.id);
+                                      setTenantOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === tenant.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="text-sm">{tenant.companyName}</span>
+                                      <span className="text-xs text-muted-foreground">{tenant.klx} · {tenant.klCustomerNumber}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}

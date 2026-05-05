@@ -62,7 +62,7 @@ type InspectionFeedback = {
   responses: SingleResponse[];
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 function overallAvg(rows: InspectionFeedback[], field: "reportAvg" | "serviceAvg"): number | null {
   const vals = rows.flatMap((r) => {
@@ -188,6 +188,7 @@ function FeedbackTable({
     dir: "desc",
   });
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(10);
 
   const sorted = useMemo(() => {
     const copy = [...rows];
@@ -203,9 +204,9 @@ function FeedbackTable({
     return copy;
   }, [rows, sort.key, sort.dir]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const paginated = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginated = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const toggleSort = (key: SortKey) => {
     setSort((prev) =>
@@ -315,11 +316,32 @@ function FeedbackTable({
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t">
+        <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t flex-wrap">
+          <div className="flex items-center gap-2">
             <p className="text-xs text-muted-foreground">
-              {rows.length} inspection{rows.length !== 1 ? "s" : ""} · Page {safePage} of {totalPages}
+              {rows.length} inspection{rows.length !== 1 ? "s" : ""}
+              {totalPages > 1 && ` · Page ${safePage} of ${totalPages}`}
             </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Show</span>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setPageSize(n); setPage(1); }}
+                  className={cn(
+                    "text-xs px-2 py-0.5 rounded border transition-colors",
+                    pageSize === n
+                      ? "bg-[#ffb800] border-[#ffb800] text-black font-medium"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground"
+                  )}
+                  data-testid={`page-size-${n}`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -351,8 +373,8 @@ function FeedbackTable({
                 <ChevronRight className="w-3.5 h-3.5" />
               </Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );

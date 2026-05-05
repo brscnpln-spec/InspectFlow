@@ -272,7 +272,7 @@ function FeedbackTable({
                   <td className="px-3 py-2.5">
                     <button
                       className="text-[#ffb800] hover:underline font-mono text-[11px] flex items-center gap-1"
-                      onClick={() => setLocation(`/inspections/${row.inspectionId}`)}
+                      onClick={() => window.open(`/inspections/${row.inspectionId}`, "_blank")}
                       data-testid={`link-inspection-${row.inspectionId}`}
                     >
                       {row.inspectionId.slice(0, 8)}…
@@ -477,7 +477,7 @@ function FeedbackDetailModal({
             variant="outline"
             size="sm"
             className="w-full gap-1.5"
-            onClick={() => { setLocation(`/inspections/${row.inspectionId}`); onClose(); }}
+            onClick={() => { window.open(`/inspections/${row.inspectionId}`, "_blank"); onClose(); }}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             View Inspection

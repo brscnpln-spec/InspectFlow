@@ -30,6 +30,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 8. Inspection report file upload - Mandatory file upload before closing inspections; Admin sees all reports, service members see only their own uploads
 9. Assignment accept/reject workflow - Service members must accept/reject within 24h (12h for emergency); auto-expires if no response; pending assignments shown transparently in calendar
 10. Two mandatory contact persons per inspection - contact person 1 and 2 require name, phone, and email; both contacts are shown in inspection records and receive NPS/final close notification links
+11. Tenant/Company management - Dedicated Tenants page (admin: full CRUD; members: view/edit own linked tenants); inspections reference a tenant via tenantId; company+contact info denormalized at creation time; inspection form uses tenant dropdown instead of free-form fields; edit inspection dialog shows read-only note directing to Tenants page
 
 ## Project Structure
 - `shared/schema.ts` - Database schema and types
@@ -43,6 +44,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - `client/src/lib/auth.tsx` - Auth context
 
 ## API Endpoints
+- GET /api/tenants, POST /api/tenants (admin), GET /api/tenants/:id, PATCH /api/tenants/:id, DELETE /api/tenants/:id (admin only)
 - POST /api/auth/login, GET /api/auth/me, POST /api/auth/logout
 - GET /api/inspections, GET /api/inspections/:id, POST /api/inspections, PATCH /api/inspections/:id (admin edit)
 - PATCH /api/inspections/:id/assign, /close, /final-close, /cancel, /accept-assignment, /reject-assignment

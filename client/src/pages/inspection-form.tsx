@@ -17,7 +17,6 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -27,17 +26,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft } from "lucide-react";
-import type { User } from "@shared/schema";
+import { Loader2, ArrowLeft, Building2, User as UserIcon, Phone, Mail, Hash } from "lucide-react";
+import type { User, Tenant } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
 
 const inspectionFormSchema = z.object({
-  companyName: z.string().min(1, "Company name is required"),
-  contactPerson1: z.string().trim().min(1, "Contact person 1 is required"),
-  contactPerson2: z.string().trim().min(1, "Contact person 2 is required"),
-  phone1: z.string().trim().min(1, "Phone 1 is required"),
-  phone2: z.string().trim().min(1, "Phone 2 is required"),
-  email1: z.string().email("Valid email is required"),
-  email2: z.string().email("Valid email is required"),
+  tenantId: z.string().min(1, "Please select a tenant"),
   notes: z.string().optional(),
   isEmergency: z.boolean().default(false),
   recurringDays: z.number().optional(),
@@ -51,21 +45,20 @@ type InspectionFormValues = z.infer<typeof inspectionFormSchema>;
 export default function InspectionFormPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
 
   const { data: teamMembers = [] } = useQuery<User[]>({
     queryKey: ["/api/users/service-members"],
   });
 
+  const { data: tenants = [], isLoading: tenantsLoading } = useQuery<Tenant[]>({
+    queryKey: ["/api/tenants"],
+  });
+
   const form = useForm<InspectionFormValues>({
     resolver: zodResolver(inspectionFormSchema),
     defaultValues: {
-      companyName: "",
-      contactPerson1: "",
-      contactPerson2: "",
-      phone1: "",
-      phone2: "",
-      email1: "",
-      email2: "",
+      tenantId: "",
       notes: "",
       isEmergency: false,
       assignedServiceMemberId: "",
@@ -76,7 +69,13 @@ export default function InspectionFormPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: InspectionFormValues) => {
-      const res = await apiRequest("POST", "/api/inspections", data);
+      const res = await apiRequest("POST", "/api/inspections", {
+        ...data,
+        recurringDays: data.recurringDays || undefined,
+        assignedServiceMemberId: data.assignedServiceMemberId || undefined,
+        inspectionDate: data.inspectionDate || undefined,
+        inspectionTime: data.inspectionTime || undefined,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -88,6 +87,12 @@ export default function InspectionFormPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const handleTenantChange = (tenantId: string) => {
+    form.setValue("tenantId", tenantId);
+    const tenant = tenants.find((t) => t.id === tenantId) || null;
+    setSelectedTenant(tenant);
+  };
 
   return (
     <div className="p-6 overflow-auto h-full">
@@ -109,109 +114,91 @@ export default function InspectionFormPage() {
           <form onSubmit={form.handleSubmit((d) => mutation.mutate(d))} className="space-y-6">
             <Card>
               <CardHeader className="pb-3">
-                <h2 className="font-semibold text-sm">Company Information</h2>
+                <h2 className="font-semibold text-sm">Select Tenant</h2>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="companyName"
+                  name="tenantId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Company Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter company name" {...field} data-testid="input-company-name" />
-                      </FormControl>
+                      <FormLabel>Tenant / Company *</FormLabel>
+                      <Select
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          handleTenantChange(val);
+                        }}
+                        value={field.value}
+                        disabled={tenantsLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-tenant">
+                            <SelectValue placeholder={tenantsLoading ? "Loading tenants..." : "Select a tenant"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tenants.map((tenant) => (
+                            <SelectItem key={tenant.id} value={tenant.id}>
+                              {tenant.companyName} — {tenant.klx}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="contactPerson1"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Person 1 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Primary contact" {...field} data-testid="input-contact-1" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contactPerson2"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Person 2 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Secondary contact" {...field} data-testid="input-contact-2" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="phone1"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone 1 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="+1 234 567 890" {...field} data-testid="input-phone-1" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="phone2"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone 2 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="+1 234 567 891" {...field} data-testid="input-phone-2" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="email1"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email 1 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="primary@company.com" {...field} data-testid="input-email-1" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email2"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email 2 *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="secondary@company.com" {...field} data-testid="input-email-2" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                {selectedTenant && (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-[#ffb800]" />
+                      <span className="font-medium text-sm">{selectedTenant.companyName}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        <Hash className="w-2.5 h-2.5 mr-0.5" />
+                        {selectedTenant.klx}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        KL: {selectedTenant.klCustomerNumber}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted-foreground">
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground text-[11px] uppercase tracking-wide">Contact 1</p>
+                        <div className="flex items-center gap-1.5">
+                          <UserIcon className="w-3 h-3" />
+                          <span>{selectedTenant.contactPerson1}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3" />
+                          <span>{selectedTenant.phone1}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-3 h-3" />
+                          <span>{selectedTenant.email1}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground text-[11px] uppercase tracking-wide">Contact 2</p>
+                        <div className="flex items-center gap-1.5">
+                          <UserIcon className="w-3 h-3" />
+                          <span>{selectedTenant.contactPerson2}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3" />
+                          <span>{selectedTenant.phone2}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-3 h-3" />
+                          <span>{selectedTenant.email2}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Company info is read-only. Edit from the Tenants page.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -274,53 +261,49 @@ export default function InspectionFormPage() {
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="isEmergency"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <FormLabel className="mb-0">Emergency Inspection</FormLabel>
-                        <FormDescription className="text-xs">
-                          Mark this as an emergency inspection (SLA: 3 days)
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="switch-emergency"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="recurringDays"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Recurring Interval (days)</FormLabel>
-                      <Select
-                        onValueChange={(v) => field.onChange(v ? Number(v) : undefined)}
-                        value={field.value?.toString() || ""}
-                      >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="isEmergency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Emergency</FormLabel>
+                        <div className="flex items-center gap-2 h-10">
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="switch-emergency"
+                            />
+                          </FormControl>
+                          <span className="text-sm text-muted-foreground">
+                            {field.value ? "Yes — 12h response window" : "No — 24h response window"}
+                          </span>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="recurringDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Recurring (days)</FormLabel>
                         <FormControl>
-                          <SelectTrigger data-testid="select-recurring">
-                            <SelectValue placeholder="One-time inspection" />
-                          </SelectTrigger>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="e.g. 30, 45, 60"
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                            data-testid="input-recurring"
+                          />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="0">One-time</SelectItem>
-                          <SelectItem value="45">Every 45 days</SelectItem>
-                          <SelectItem value="60">Every 60 days</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -338,7 +321,7 @@ export default function InspectionFormPage() {
                         <Textarea
                           placeholder="Any additional notes about this inspection..."
                           className="resize-none"
-                          rows={4}
+                          rows={3}
                           {...field}
                           data-testid="input-notes"
                         />
@@ -350,30 +333,17 @@ export default function InspectionFormPage() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setLocation("/inspections")}
-                data-testid="button-cancel"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={mutation.isPending}
-                data-testid="button-submit"
-              >
-                {mutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Inspection"
-                )}
-              </Button>
-            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+              data-testid="button-submit"
+            >
+              {mutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              Create Inspection
+            </Button>
           </form>
         </Form>
       </div>

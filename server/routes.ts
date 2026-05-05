@@ -29,14 +29,20 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
 });
 
+const tenantSchema = z.object({
+  companyName: z.string().trim().min(1, "Company name is required"),
+  klx: z.string().trim().min(1, "KLX is required"),
+  klCustomerNumber: z.string().trim().min(1, "KL Customer Number is required"),
+  contactPerson1: z.string().trim().min(1, "Contact 1 name is required"),
+  phone1: z.string().trim().min(1, "Contact 1 phone is required"),
+  email1: z.string().trim().email("Contact 1 email must be valid"),
+  contactPerson2: z.string().trim().min(1, "Contact 2 name is required"),
+  phone2: z.string().trim().min(1, "Contact 2 phone is required"),
+  email2: z.string().trim().email("Contact 2 email must be valid"),
+});
+
 const createInspectionSchema = z.object({
-  companyName: z.string().min(1),
-  contactPerson1: z.string().trim().min(1),
-  contactPerson2: z.string().trim().min(1),
-  phone1: z.string().trim().min(1),
-  phone2: z.string().trim().min(1),
-  email1: z.string().trim().email(),
-  email2: z.string().trim().email(),
+  tenantId: z.string().min(1, "Tenant is required"),
   notes: z.string().optional().nullable(),
   isEmergency: z.boolean().optional().default(false),
   recurringDays: z.number().optional().nullable(),
@@ -46,12 +52,6 @@ const createInspectionSchema = z.object({
 });
 
 const editInspectionSchema = z.object({
-  contactPerson1: z.string().trim().min(1),
-  contactPerson2: z.string().trim().min(1),
-  phone1: z.string().trim().min(1),
-  phone2: z.string().trim().min(1),
-  email1: z.string().trim().email(),
-  email2: z.string().trim().email(),
   notes: z.string().optional().nullable(),
   isEmergency: z.boolean(),
   recurringDays: z.number().optional().nullable(),
@@ -274,6 +274,72 @@ export async function registerRoutes(
     res.json({ message: "User deleted" });
   });
 
+  app.get("/api/tenants", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    if (user.role === "admin") {
+      return res.json(await storage.getTenants());
+    }
+
+    const inspections = await storage.getInspectionsByServiceMember(user.id);
+    const tenantIds = [...new Set(inspections.map(i => i.tenantId).filter(Boolean) as string[])];
+    return res.json(await storage.getTenantsByIds(tenantIds));
+  });
+
+  app.get("/api/tenants/:id", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    const tenant = await storage.getTenant(req.params.id);
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+
+    if (user.role !== "admin") {
+      const inspections = await storage.getInspectionsByServiceMember(user.id);
+      const allowed = inspections.some(i => i.tenantId === tenant.id);
+      if (!allowed) return res.status(403).json({ message: "Access denied" });
+    }
+
+    res.json(tenant);
+  });
+
+  app.post("/api/tenants", requireAdmin, async (req: Request, res: Response) => {
+    const parsed = tenantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    const tenant = await storage.createTenant(parsed.data);
+    res.status(201).json(tenant);
+  });
+
+  app.patch("/api/tenants/:id", requireAuth, async (req: Request, res: Response) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    const existing = await storage.getTenant(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Tenant not found" });
+
+    if (user.role !== "admin") {
+      const inspections = await storage.getInspectionsByServiceMember(user.id);
+      const allowed = inspections.some(i => i.tenantId === existing.id);
+      if (!allowed) return res.status(403).json({ message: "Access denied" });
+    }
+
+    const parsed = tenantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    const tenant = await storage.updateTenant(req.params.id, parsed.data);
+    res.json(tenant);
+  });
+
+  app.delete("/api/tenants/:id", requireAdmin, async (req: Request, res: Response) => {
+    const tenant = await storage.getTenant(req.params.id);
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+    await storage.deleteTenant(req.params.id);
+    res.json({ message: "Tenant deleted" });
+  });
+
   app.get("/api/inspections", requireAuth, async (req: Request, res: Response) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
@@ -307,6 +373,10 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
     }
     const data = parsed.data;
+
+    const tenant = await storage.getTenant(data.tenantId);
+    if (!tenant) return res.status(400).json({ message: "Tenant not found" });
+
     const user = await storage.getUser(req.session.userId!);
     const hasAssignment = !!(data.assignedServiceMemberId && data.inspectionDate);
     const status = hasAssignment ? "scheduled" : "new";
@@ -320,13 +390,14 @@ export async function registerRoutes(
     }
 
     const inspection = await storage.createInspection({
-      companyName: data.companyName,
-      contactPerson1: data.contactPerson1,
-      contactPerson2: data.contactPerson2,
-      phone1: data.phone1,
-      phone2: data.phone2,
-      email1: data.email1,
-      email2: data.email2,
+      tenantId: tenant.id,
+      companyName: tenant.companyName,
+      contactPerson1: tenant.contactPerson1,
+      contactPerson2: tenant.contactPerson2,
+      phone1: tenant.phone1,
+      phone2: tenant.phone2,
+      email1: tenant.email1,
+      email2: tenant.email2,
       notes: data.notes || null,
       status,
       assignedServiceMemberId: data.assignedServiceMemberId || null,
@@ -359,12 +430,6 @@ export async function registerRoutes(
     const serviceMemberChanged = data.assignedServiceMemberId !== existing.assignedServiceMemberId;
 
     const updateData: Partial<InspectionRequest> = {
-      contactPerson1: data.contactPerson1,
-      contactPerson2: data.contactPerson2,
-      phone1: data.phone1,
-      phone2: data.phone2,
-      email1: data.email1,
-      email2: data.email2,
       notes: data.notes || null,
       isEmergency: data.isEmergency,
       recurringDays: data.recurringDays || null,
@@ -881,6 +946,26 @@ async function pushSchema() {
       WHERE assigned_service_member_id IS NOT NULL
         AND assignment_status IS NULL
         AND status IN ('scheduled', 'closed', 'final_closed');
+    `);
+
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_name TEXT NOT NULL,
+        klx TEXT NOT NULL DEFAULT '',
+        kl_customer_number TEXT NOT NULL DEFAULT '',
+        contact_person_1 TEXT NOT NULL,
+        phone_1 TEXT NOT NULL,
+        email_1 TEXT NOT NULL,
+        contact_person_2 TEXT NOT NULL DEFAULT '',
+        phone_2 TEXT NOT NULL DEFAULT '',
+        email_2 TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await dbPool.query(`
+      ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS tenant_id VARCHAR;
     `);
 
     console.log("Database schema verified successfully");

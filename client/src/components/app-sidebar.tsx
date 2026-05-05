@@ -6,6 +6,7 @@ import {
   Users,
   AlertTriangle,
   CalendarDays,
+  Building2,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -29,6 +30,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 const adminItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Inspections", url: "/inspections", icon: ClipboardList },
+  { title: "Tenants", url: "/tenants", icon: Building2 },
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Emergency", url: "/emergency", icon: AlertTriangle },
   { title: "Team", url: "/team", icon: Users },
@@ -37,6 +39,7 @@ const adminItems = [
 
 const memberItems = [
   { title: "My Inspections", url: "/", icon: ClipboardList },
+  { title: "Tenants", url: "/tenants", icon: Building2 },
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
 ];
 

@@ -1,11 +1,14 @@
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
+  tenants,
   users,
   inspectionRequests,
   npsSurveys,
   npsResponses,
   inspectionReports,
+  type Tenant,
+  type InsertTenant,
   type User,
   type InsertUser,
   type InspectionRequest,
@@ -20,6 +23,13 @@ import {
 import { randomUUID } from "crypto";
 
 export interface IStorage {
+  getTenants(): Promise<Tenant[]>;
+  getTenantsByIds(ids: string[]): Promise<Tenant[]>;
+  getTenant(id: string): Promise<Tenant | undefined>;
+  createTenant(data: InsertTenant): Promise<Tenant>;
+  updateTenant(id: string, data: Partial<Tenant>): Promise<Tenant | undefined>;
+  deleteTenant(id: string): Promise<void>;
+
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -53,6 +63,34 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async getTenants(): Promise<Tenant[]> {
+    return db.select().from(tenants).orderBy(tenants.companyName);
+  }
+
+  async getTenantsByIds(ids: string[]): Promise<Tenant[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(tenants).where(inArray(tenants.id, ids));
+  }
+
+  async getTenant(id: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    return tenant;
+  }
+
+  async createTenant(data: InsertTenant): Promise<Tenant> {
+    const [tenant] = await db.insert(tenants).values(data).returning();
+    return tenant;
+  }
+
+  async updateTenant(id: string, data: Partial<Tenant>): Promise<Tenant | undefined> {
+    const [tenant] = await db.update(tenants).set(data).where(eq(tenants.id, id)).returning();
+    return tenant;
+  }
+
+  async deleteTenant(id: string): Promise<void> {
+    await db.delete(tenants).where(eq(tenants.id, id));
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;

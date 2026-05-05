@@ -7,6 +7,20 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "service_member"]);
 export const inspectionStatusEnum = pgEnum("inspection_status", ["new", "scheduled", "closed", "final_closed", "canceled"]);
 export const assignmentStatusEnum = pgEnum("assignment_status", ["pending", "accepted", "rejected", "expired"]);
 
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: text("company_name").notNull(),
+  klx: text("klx").notNull(),
+  klCustomerNumber: text("kl_customer_number").notNull(),
+  contactPerson1: text("contact_person_1").notNull(),
+  phone1: text("phone_1").notNull(),
+  email1: text("email_1").notNull(),
+  contactPerson2: text("contact_person_2").notNull(),
+  phone2: text("phone_2").notNull(),
+  email2: text("email_2").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
@@ -19,6 +33,7 @@ export const users = pgTable("users", {
 
 export const inspectionRequests = pgTable("inspection_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id"),
   companyName: text("company_name").notNull(),
   contactPerson1: text("contact_person_1").notNull(),
   contactPerson2: text("contact_person_2").notNull(),
@@ -78,6 +93,7 @@ export const inspectionReports = pgTable("inspection_reports", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
+export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertInspectionSchema = createInsertSchema(inspectionRequests).omit({ id: true, createdAt: true, updatedAt: true, status: true });
 export const insertNpsSurveySchema = createInsertSchema(npsSurveys).omit({ id: true, sentAt: true, completedAt: true });
@@ -89,6 +105,8 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InspectionRequest = typeof inspectionRequests.$inferSelect;

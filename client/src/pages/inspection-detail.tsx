@@ -75,12 +75,6 @@ export default function InspectionDetailPage() {
   const [reportViewDialogOpen, setReportViewDialogOpen] = useState(false);
   const [viewingReportId, setViewingReportId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
-    contactPerson1: "",
-    contactPerson2: "",
-    phone1: "",
-    phone2: "",
-    email1: "",
-    email2: "",
     notes: "",
     isEmergency: false,
     recurringDays: null as number | null,
@@ -249,11 +243,8 @@ export default function InspectionDetailPage() {
   const editMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("PATCH", `/api/inspections/${params?.id}`, {
-        ...editForm,
-        contactPerson2: editForm.contactPerson2,
-        phone2: editForm.phone2,
-        email2: editForm.email2,
         notes: editForm.notes || null,
+        isEmergency: editForm.isEmergency,
         recurringDays: editForm.recurringDays || null,
         assignedServiceMemberId: editForm.assignedServiceMemberId || null,
         inspectionDate: editForm.inspectionDate || null,
@@ -274,12 +265,6 @@ export default function InspectionDetailPage() {
   const openEditDialog = () => {
     if (!inspection) return;
     setEditForm({
-      contactPerson1: inspection.contactPerson1 || "",
-      contactPerson2: inspection.contactPerson2 || "",
-      phone1: inspection.phone1 || "",
-      phone2: inspection.phone2 || "",
-      email1: inspection.email1 || "",
-      email2: inspection.email2 || "",
       notes: inspection.notes || "",
       isEmergency: inspection.isEmergency || false,
       recurringDays: inspection.recurringDays || null,
@@ -795,69 +780,9 @@ export default function InspectionDetailPage() {
               <DialogTitle>Edit Inspection</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-contact1">Contact Person 1 *</Label>
-                  <Input
-                    id="edit-contact1"
-                    value={editForm.contactPerson1}
-                    onChange={(e) => setEditForm({ ...editForm, contactPerson1: e.target.value })}
-                    data-testid="input-edit-contact1"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-contact2">Contact Person 2 *</Label>
-                  <Input
-                    id="edit-contact2"
-                    value={editForm.contactPerson2}
-                    onChange={(e) => setEditForm({ ...editForm, contactPerson2: e.target.value })}
-                    data-testid="input-edit-contact2"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-phone1">Phone 1 *</Label>
-                  <Input
-                    id="edit-phone1"
-                    value={editForm.phone1}
-                    onChange={(e) => setEditForm({ ...editForm, phone1: e.target.value })}
-                    data-testid="input-edit-phone1"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-phone2">Phone 2 *</Label>
-                  <Input
-                    id="edit-phone2"
-                    value={editForm.phone2}
-                    onChange={(e) => setEditForm({ ...editForm, phone2: e.target.value })}
-                    data-testid="input-edit-phone2"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-email1">Email 1 *</Label>
-                  <Input
-                    id="edit-email1"
-                    type="email"
-                    value={editForm.email1}
-                    onChange={(e) => setEditForm({ ...editForm, email1: e.target.value })}
-                    data-testid="input-edit-email1"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-email2">Email 2 *</Label>
-                  <Input
-                    id="edit-email2"
-                    type="email"
-                    value={editForm.email2}
-                    onChange={(e) => setEditForm({ ...editForm, email2: e.target.value })}
-                    data-testid="input-edit-email2"
-                  />
-                </div>
+              <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Company &amp; contact info is managed via the <strong>Tenants</strong> page and is read-only here.</span>
               </div>
 
               <div className="space-y-1.5">
@@ -954,15 +879,7 @@ export default function InspectionDetailPage() {
                 </Button>
                 <Button
                   onClick={() => editMutation.mutate()}
-                  disabled={
-                    editMutation.isPending ||
-                    !editForm.contactPerson1.trim() ||
-                    !editForm.contactPerson2.trim() ||
-                    !editForm.phone1.trim() ||
-                    !editForm.phone2.trim() ||
-                    !editForm.email1.trim() ||
-                    !editForm.email2.trim()
-                  }
+                  disabled={editMutation.isPending}
                   data-testid="button-edit-save"
                 >
                   {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}

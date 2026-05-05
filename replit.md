@@ -29,8 +29,9 @@ An internal workflow tool for managing OGI inspection requests from customer int
 7. Calendar view - Monthly grid showing inspections; Admin sees all inspections color-coded by service member, Members see only their own; Pending assignments shown with reduced opacity and dashed border
 8. Inspection report file upload - Mandatory file upload before closing inspections; Admin sees all reports, service members see only their own uploads
 9. Assignment accept/reject workflow - Service members must accept/reject within 24h (12h for emergency); auto-expires if no response; pending assignments shown transparently in calendar
-10. Two mandatory contact persons per inspection - contact person 1 and 2 require name, phone, and email; both contacts are shown in inspection records and receive NPS/final close notification links
+10. Two mandatory contact persons per inspection - contact person 1 and 2 require name, phone, and email; both contacts are shown in inspection records and receive survey/final close notification links
 11. Tenant/Company management - Dedicated Tenants page (admin: full CRUD; members: view/edit own linked tenants); inspections reference a tenant via tenantId; company+contact info denormalized at creation time; inspection form uses tenant dropdown instead of free-form fields; edit inspection dialog shows read-only note directing to Tenants page
+12. Feedback Manager (Analytics page) - Three tabs: General (all-feedback gauge charts), Customer (per-tenant dropdown + gauges + table), Team Member (per-member dropdown + gauges + table); semi-circle gauge charts for Report Quality and Service Quality (0-10); clickable Inspection ID links and feedback detail modals; sortable + paginated table; no "NPS" terminology anywhere in UI; sidebar entry labeled "Feedback Manager"
 
 ## Project Structure
 - `shared/schema.ts` - Database schema and types
@@ -53,6 +54,7 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - POST /api/inspections/:id/reactivate-nps (admin-only, extend NPS expiry 24h)
 - GET /api/survey/:token, POST /api/survey/:token/respond
 - GET /api/nps/responses
+- GET /api/feedback (admin-only, enriched feedback rows joined with inspections + users)
 - POST /api/inspections/:id/reports, GET /api/inspections/:id/reports
 - GET /api/reports/:id/download, DELETE /api/reports/:id
 - GET /api/users (admin-only, all users), GET /api/users/service-members, GET /api/users/:id

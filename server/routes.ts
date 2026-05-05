@@ -274,6 +274,38 @@ export async function registerRoutes(
     res.json({ message: "User deleted" });
   });
 
+  app.get("/api/feedback", requireAdmin, async (req: Request, res: Response) => {
+    const [responses, inspections, allUsers] = await Promise.all([
+      storage.getNpsResponses(),
+      storage.getInspections(),
+      storage.getAllUsers(),
+    ]);
+
+    const inspectionMap = new Map(inspections.map((i) => [i.id, i]));
+    const userMap = new Map(allUsers.map((u) => [u.id, u]));
+
+    const rows = responses.map((r) => {
+      const inspection = inspectionMap.get(r.inspectionId);
+      const member = userMap.get(r.serviceMemberId);
+      return {
+        id: r.id,
+        inspectionId: r.inspectionId,
+        companyName: inspection?.companyName ?? "",
+        tenantId: inspection?.tenantId ?? null,
+        memberId: r.serviceMemberId,
+        memberName: member?.name ?? "Unknown",
+        inspectionDate: inspection?.inspectionDate ?? null,
+        reportScore: r.reportScore,
+        serviceScore: r.serviceScore,
+        comment: r.comment,
+        respondentEmail: r.respondentEmail,
+        createdAt: r.createdAt,
+      };
+    });
+
+    res.json(rows);
+  });
+
   app.get("/api/tenants", requireAuth, async (req: Request, res: Response) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });

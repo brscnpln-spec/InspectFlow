@@ -34,7 +34,7 @@ const adminItems = [
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Emergency", url: "/emergency", icon: AlertTriangle },
   { title: "Team", url: "/team", icon: Users },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Feedback Manager", url: "/analytics", icon: BarChart3 },
 ];
 
 const memberItems = [

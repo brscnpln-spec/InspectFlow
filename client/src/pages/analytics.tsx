@@ -1,333 +1,716 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Users,
-} from "lucide-react";
-import type { NpsResponse, User } from "@shared/schema";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   PieChart,
   Pie,
   Cell,
+  ResponsiveContainer,
 } from "recharts";
+import {
+  BarChart3,
+  ChevronsUpDown,
+  Check,
+  ExternalLink,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-function classifyNps(score: number): "promoter" | "passive" | "detractor" {
-  if (score >= 9) return "promoter";
-  if (score >= 7) return "passive";
-  return "detractor";
-}
-
-function calculateNps(scores: number[]): number {
-  if (scores.length === 0) return 0;
-  const promoters = scores.filter((s) => s >= 9).length;
-  const detractors = scores.filter((s) => s <= 6).length;
-  return Math.round(((promoters - detractors) / scores.length) * 100);
-}
-
-const NPS_COLORS = {
-  promoter: "#22c55e",
-  passive: "#f59e0b",
-  detractor: "#ef4444",
+type FeedbackRow = {
+  id: string;
+  inspectionId: string;
+  companyName: string;
+  tenantId: string | null;
+  memberId: string;
+  memberName: string;
+  inspectionDate: string | null;
+  reportScore: number;
+  serviceScore: number | null;
+  comment: string | null;
+  respondentEmail: string;
+  createdAt: string | null;
 };
 
-export default function AnalyticsPage() {
-  const { data: responses = [], isLoading: loadingResponses } = useQuery<NpsResponse[]>({
-    queryKey: ["/api/nps/responses"],
-  });
+function avg(scores: number[]): number | null {
+  if (scores.length === 0) return null;
+  return Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+}
 
-  const { data: members = [], isLoading: loadingMembers } = useQuery<User[]>({
-    queryKey: ["/api/users/service-members"],
-  });
+function scoreColor(score: number | null): string {
+  if (score === null) return "#d1d5db";
+  if (score >= 8) return "#22c55e";
+  if (score >= 6) return "#f59e0b";
+  if (score >= 4) return "#f97316";
+  return "#ef4444";
+}
 
-  const isLoading = loadingResponses || loadingMembers;
+function scoreLabel(score: number | null): string {
+  if (score === null) return "N/A";
+  if (score >= 8) return "Excellent";
+  if (score >= 6) return "Good";
+  if (score >= 4) return "Fair";
+  return "Poor";
+}
 
-  const reportScores = responses.map((r) => r.reportScore);
-  const serviceScores = responses.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!);
+const TABLE_PAGE_SIZE = 10;
 
-  const globalReportNps = calculateNps(reportScores);
-  const globalServiceNps = calculateNps(serviceScores);
-  const totalResponses = responses.length;
-  const responseRate = totalResponses > 0 ? Math.round((totalResponses / Math.max(totalResponses, 1)) * 100) : 0;
-
-  const reportDistribution = Array.from({ length: 11 }, (_, i) => ({
-    score: i,
-    count: reportScores.filter((s) => s === i).length,
-    fill: i >= 9 ? NPS_COLORS.promoter : i >= 7 ? NPS_COLORS.passive : NPS_COLORS.detractor,
-  }));
-
-  const serviceDistribution = Array.from({ length: 11 }, (_, i) => ({
-    score: i,
-    count: serviceScores.filter((s) => s === i).length,
-    fill: i >= 9 ? NPS_COLORS.promoter : i >= 7 ? NPS_COLORS.passive : NPS_COLORS.detractor,
-  }));
-
-  const memberStats = members.map((m) => {
-    const memberResponses = responses.filter((r) => r.serviceMemberId === m.id);
-    const mReportScores = memberResponses.map((r) => r.reportScore);
-    const mServiceScores = memberResponses.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!);
-    return {
-      name: m.name,
-      reportNps: calculateNps(mReportScores),
-      serviceNps: calculateNps(mServiceScores),
-      responses: memberResponses.length,
-    };
-  }).filter((m) => m.responses > 0);
-
-  const pieData = [
-    { name: "Promoters", value: reportScores.filter((s) => s >= 9).length, color: NPS_COLORS.promoter },
-    { name: "Passives", value: reportScores.filter((s) => s >= 7 && s <= 8).length, color: NPS_COLORS.passive },
-    { name: "Detractors", value: reportScores.filter((s) => s <= 6).length, color: NPS_COLORS.detractor },
-  ].filter((d) => d.value > 0);
-
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
+function GaugeChart({ value, label }: { value: number | null; label: string }) {
+  const score = value ?? 0;
+  const filled = score;
+  const empty = 10 - filled;
+  const color = scoreColor(value);
+  const noData = value === null;
 
   return (
-    <div className="p-6 space-y-6 overflow-auto h-full">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="w-5 h-5 text-[#ffb800]" />
-        <h1 className="text-xl font-bold">NPS Analytics</h1>
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: 180, height: 100 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={[
+                { value: noData ? 10 : filled },
+                { value: noData ? 0 : empty },
+              ]}
+              cx="50%"
+              cy="100%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={55}
+              outerRadius={80}
+              dataKey="value"
+              strokeWidth={0}
+              isAnimationActive={true}
+            >
+              <Cell fill={noData ? "#e5e7eb" : color} />
+              <Cell fill="#e5e7eb" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div
+          className="absolute inset-x-0 flex flex-col items-center"
+          style={{ bottom: 4 }}
+        >
+          <span className="text-2xl font-bold" style={{ color: noData ? "#9ca3af" : color }}>
+            {noData ? "—" : score.toFixed(1)}
+          </span>
+          <span className="text-[10px] text-muted-foreground">/ 10</span>
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <NpsScoreCard label="Report NPS" score={globalReportNps} />
-        <NpsScoreCard label="Service NPS" score={globalServiceNps} />
-        <Card>
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Total Responses</p>
-            <p className="text-2xl font-bold mt-1">{totalResponses}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Team Members</p>
-            <p className="text-2xl font-bold mt-1">{members.length}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {totalResponses === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-muted-foreground">No NPS data yet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Survey responses will appear here once customers complete their feedback
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="overview">
-          <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="inline-flex w-auto min-w-max">
-              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-              <TabsTrigger value="report" data-testid="tab-report">Report NPS</TabsTrigger>
-              <TabsTrigger value="service" data-testid="tab-service">Service NPS</TabsTrigger>
-              <TabsTrigger value="team" data-testid="tab-team">By Team Member</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="overview" className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <h3 className="font-semibold text-sm">NPS Distribution</h3>
-                </CardHeader>
-                <CardContent>
-                  {pieData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                          dataKey="value"
-                          label={({ name, value }) => `${name}: ${value}`}
-                        >
-                          {pieData.map((entry, idx) => (
-                            <Cell key={idx} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-8">No data</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <h3 className="font-semibold text-sm">Recent Responses</h3>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {responses.slice(0, 5).map((r) => (
-                      <div key={r.id} className="flex items-center justify-between gap-2 p-2 rounded-md border">
-                        <div>
-                          <p className="text-xs text-muted-foreground">{r.respondentEmail}</p>
-                          <div className="flex gap-2 mt-1 flex-wrap">
-                            <Badge variant="outline" className="text-[10px]">Report: {r.reportScore}/10</Badge>
-                            {r.serviceScore !== null && (
-                              <Badge variant="outline" className="text-[10px]">Service: {r.serviceScore}/10</Badge>
-                            )}
-                          </div>
-                        </div>
-                        <NpsIndicator score={r.reportScore} />
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="report" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm">Report Score Distribution (0-10)</h3>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={reportDistribution}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="score" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {reportDistribution.map((entry, idx) => (
-                        <Cell key={idx} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="service" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm">Service Score Distribution (0-10)</h3>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={serviceDistribution}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="score" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {serviceDistribution.map((entry, idx) => (
-                        <Cell key={idx} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="team" className="mt-4">
-            <div className="space-y-3">
-              {memberStats.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <Users className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                    <p className="text-muted-foreground">No team member data yet</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                memberStats.map((stat) => (
-                  <Card key={stat.name}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-[#ffb800] flex items-center justify-center text-sm font-bold text-black">
-                            {stat.name.charAt(0)}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-sm">{stat.name}</h3>
-                            <p className="text-xs text-muted-foreground">{stat.responses} responses</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 flex-wrap">
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Report NPS</p>
-                            <p className="font-bold text-sm">{stat.reportNps}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Service NPS</p>
-                            <p className="font-bold text-sm">{stat.serviceNps}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+      <p className="text-xs font-medium text-center">{label}</p>
+      {!noData && (
+        <span
+          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+          style={{ background: `${color}20`, color }}
+        >
+          {scoreLabel(value)}
+        </span>
       )}
     </div>
   );
 }
 
-function NpsScoreCard({ label, score }: { label: string; score: number }) {
-  const Icon = score > 0 ? TrendingUp : score < 0 ? TrendingDown : Minus;
-  const color = score > 0 ? "text-green-600" : score < 0 ? "text-red-600" : "text-muted-foreground";
+function GaugePair({
+  reportAvg,
+  serviceAvg,
+  count,
+}: {
+  reportAvg: number | null;
+  serviceAvg: number | null;
+  count: number;
+}) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <p className={`text-2xl font-bold ${color}`}>{score}</p>
-          <Icon className={`w-4 h-4 ${color}`} />
+      <CardContent className="pt-6 pb-4">
+        <div className="flex flex-col items-center gap-2 mb-4">
+          <p className="text-xs text-muted-foreground">
+            Based on <strong>{count}</strong> feedback{count !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="flex items-end justify-center gap-10 flex-wrap">
+          <GaugeChart value={reportAvg} label="Report Quality" />
+          <GaugeChart value={serviceAvg} label="Service Quality" />
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function NpsIndicator({ score }: { score: number }) {
-  const type = classifyNps(score);
-  const config = {
-    promoter: { label: "Promoter", color: "bg-green-100 text-green-800" },
-    passive: { label: "Passive", color: "bg-yellow-100 text-yellow-800" },
-    detractor: { label: "Detractor", color: "bg-red-100 text-red-800" },
+type SortKey = "inspectionId" | "companyName" | "memberName" | "inspectionDate" | "reportScore" | "serviceScore";
+type SortDir = "asc" | "desc";
+
+function FeedbackTable({
+  rows,
+  onDetail,
+}: {
+  rows: FeedbackRow[];
+  onDetail: (row: FeedbackRow) => void;
+}) {
+  const [, setLocation] = useLocation();
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "inspectionDate", dir: "desc" });
+  const [page, setPage] = useState(1);
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let av: string | number | null = a[sort.key] ?? "";
+      let bv: string | number | null = b[sort.key] ?? "";
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      if (av === bv) return 0;
+      const cmp = av < bv ? -1 : 1;
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return copy;
+  }, [rows, sort.key, sort.dir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / TABLE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = sorted.slice((safePage - 1) * TABLE_PAGE_SIZE, safePage * TABLE_PAGE_SIZE);
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" }
+    );
+    setPage(1);
   };
-  const c = config[type];
+
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sort.key !== k) return <ChevronUp className="w-3 h-3 opacity-20" />;
+    return sort.dir === "asc" ? (
+      <ChevronUp className="w-3 h-3" />
+    ) : (
+      <ChevronDown className="w-3 h-3" />
+    );
+  };
+
+  const Th = ({ k, label }: { k: SortKey; label: string }) => (
+    <th
+      className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground whitespace-nowrap"
+      onClick={() => toggleSort(k)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <SortIcon k={k} />
+      </div>
+    </th>
+  );
+
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <MessageSquare className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">No feedback data for this selection</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${c.color}`}>
-      {c.label}
+    <Card>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/30">
+              <tr>
+                <Th k="inspectionId" label="Inspection ID" />
+                <Th k="companyName" label="Tenant" />
+                <Th k="memberName" label="Team Member" />
+                <Th k="inspectionDate" label="Inspection Date" />
+                <Th k="reportScore" label="Report" />
+                <Th k="serviceScore" label="Service" />
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {paginated.map((row) => (
+                <tr key={row.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-3 py-2.5">
+                    <button
+                      className="text-[#ffb800] hover:underline font-mono text-[11px] flex items-center gap-1"
+                      onClick={() => setLocation(`/inspections/${row.inspectionId}`)}
+                      data-testid={`link-inspection-${row.id}`}
+                    >
+                      {row.inspectionId.slice(0, 8)}…
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </td>
+                  <td className="px-3 py-2.5 text-sm">{row.companyName || "—"}</td>
+                  <td className="px-3 py-2.5 text-sm">{row.memberName}</td>
+                  <td className="px-3 py-2.5 text-sm text-muted-foreground">
+                    {row.inspectionDate
+                      ? new Date(row.inspectionDate).toLocaleDateString("tr-TR")
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <ScoreBadge score={row.reportScore} />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {row.serviceScore !== null ? <ScoreBadge score={row.serviceScore} /> : <span className="text-muted-foreground text-xs">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => onDetail(row)}
+                      data-testid={`button-feedback-detail-${row.id}`}
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      View
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t">
+            <p className="text-xs text-muted-foreground">
+              {rows.length} row{rows.length !== 1 ? "s" : ""} · Page {safePage} of {totalPages}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <Button
+                  key={p}
+                  variant={p === safePage ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 w-7 p-0 text-xs"
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const color = scoreColor(score);
+  return (
+    <span
+      className="inline-flex items-center justify-center text-xs font-bold rounded px-1.5 py-0.5 min-w-[2rem]"
+      style={{ background: `${color}20`, color }}
+    >
+      {score}/10
     </span>
+  );
+}
+
+function SearchableSelect<T extends string>({
+  options,
+  value,
+  onChange,
+  placeholder,
+  searchPlaceholder,
+  renderOption,
+  renderValue,
+}: {
+  options: { value: T; label: string; sub?: string }[];
+  value: T | null;
+  onChange: (val: T | null) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+  renderOption?: (opt: { value: T; label: string; sub?: string }) => React.ReactNode;
+  renderValue?: (opt: { value: T; label: string; sub?: string }) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full max-w-sm justify-between font-normal"
+          data-testid="searchable-select-trigger"
+        >
+          <span className={cn(!selected && "text-muted-foreground")}>
+            {selected ? (renderValue ? renderValue(selected) : selected.label) : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {value && (
+                <CommandItem
+                  value="__clear__"
+                  onSelect={() => { onChange(null); setOpen(false); }}
+                  className="text-muted-foreground text-xs"
+                >
+                  <X className="mr-2 h-3 w-3" />
+                  Clear selection
+                </CommandItem>
+              )}
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={`${opt.label} ${opt.sub ?? ""}`}
+                  onSelect={() => { onChange(opt.value); setOpen(false); }}
+                >
+                  <Check
+                    className={cn("mr-2 h-4 w-4", value === opt.value ? "opacity-100" : "opacity-0")}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm">{opt.label}</span>
+                    {opt.sub && <span className="text-xs text-muted-foreground">{opt.sub}</span>}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function FeedbackDetailModal({
+  row,
+  onClose,
+}: {
+  row: FeedbackRow;
+  onClose: () => void;
+}) {
+  const [, setLocation] = useLocation();
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Feedback Detail</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border p-3 text-center space-y-1">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Report Quality</p>
+              <p className="text-2xl font-bold" style={{ color: scoreColor(row.reportScore) }}>
+                {row.reportScore}/10
+              </p>
+              <p className="text-[11px]" style={{ color: scoreColor(row.reportScore) }}>
+                {scoreLabel(row.reportScore)}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 text-center space-y-1">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Service Quality</p>
+              {row.serviceScore !== null ? (
+                <>
+                  <p className="text-2xl font-bold" style={{ color: scoreColor(row.serviceScore) }}>
+                    {row.serviceScore}/10
+                  </p>
+                  <p className="text-[11px]" style={{ color: scoreColor(row.serviceScore) }}>
+                    {scoreLabel(row.serviceScore)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-2xl font-bold text-muted-foreground mt-1">—</p>
+              )}
+            </div>
+          </div>
+
+          {row.comment && (
+            <div className="rounded-lg bg-muted/40 border px-3 py-2.5">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-1">Comment</p>
+              <p className="text-sm">{row.comment}</p>
+            </div>
+          )}
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground text-xs">Respondent</span>
+              <span className="text-xs font-medium">{row.respondentEmail}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground text-xs">Tenant</span>
+              <span className="text-xs font-medium">{row.companyName || "—"}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground text-xs">Team Member</span>
+              <span className="text-xs font-medium">{row.memberName}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground text-xs">Inspection Date</span>
+              <span className="text-xs font-medium">
+                {row.inspectionDate
+                  ? new Date(row.inspectionDate).toLocaleDateString("tr-TR")
+                  : "—"}
+              </span>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-1.5"
+            onClick={() => { setLocation(`/inspections/${row.inspectionId}`); onClose(); }}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            View Inspection
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function AnalyticsPage() {
+  const [detailRow, setDetailRow] = useState<FeedbackRow | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery<FeedbackRow[]>({
+    queryKey: ["/api/feedback"],
+  });
+
+  const generalReportAvg = avg(rows.map((r) => r.reportScore));
+  const generalServiceAvg = avg(
+    rows.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!)
+  );
+
+  const tenantOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach((r) => {
+      const key = r.tenantId ?? r.companyName;
+      if (key && !seen.has(key)) seen.set(key, r.companyName || key);
+    });
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
+
+  const memberOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach((r) => {
+      if (!seen.has(r.memberId)) seen.set(r.memberId, r.memberName);
+    });
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
+
+  const tenantRows = useMemo(() => {
+    if (!selectedTenantId) return [];
+    return rows.filter(
+      (r) => (r.tenantId ?? r.companyName) === selectedTenantId
+    );
+  }, [rows, selectedTenantId]);
+
+  const memberRows = useMemo(() => {
+    if (!selectedMemberId) return [];
+    return rows.filter((r) => r.memberId === selectedMemberId);
+  }, [rows, selectedMemberId]);
+
+  const tenantReportAvg = avg(tenantRows.map((r) => r.reportScore));
+  const tenantServiceAvg = avg(
+    tenantRows.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!)
+  );
+  const memberReportAvg = avg(memberRows.map((r) => r.reportScore));
+  const memberServiceAvg = avg(
+    memberRows.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!)
+  );
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-44 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 overflow-auto h-full">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-[#ffb800]" />
+          <h1 className="text-xl font-bold">Feedback Manager</h1>
+          {rows.length > 0 && (
+            <Badge variant="secondary" className="ml-1">
+              {rows.length} total
+            </Badge>
+          )}
+        </div>
+
+        <Tabs defaultValue="general">
+          <TabsList className="inline-flex w-auto">
+            <TabsTrigger value="general" data-testid="tab-general">General</TabsTrigger>
+            <TabsTrigger value="customer" data-testid="tab-customer">Customer</TabsTrigger>
+            <TabsTrigger value="team" data-testid="tab-team">Team Member</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="general" className="mt-5 space-y-4">
+            {rows.length === 0 ? (
+              <Card>
+                <CardContent className="py-16 text-center">
+                  <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-muted-foreground">No feedback collected yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Feedback will appear here once customers complete their surveys
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <GaugePair
+                  reportAvg={generalReportAvg}
+                  serviceAvg={generalServiceAvg}
+                  count={rows.length}
+                />
+                <div>
+                  <h3 className="text-sm font-medium mb-3">All Feedback</h3>
+                  <FeedbackTable rows={rows} onDetail={setDetailRow} />
+                </div>
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="customer" className="mt-5 space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <SearchableSelect
+                options={tenantOptions}
+                value={selectedTenantId}
+                onChange={setSelectedTenantId}
+                placeholder="Select a customer / tenant"
+                searchPlaceholder="Search tenant..."
+              />
+              {selectedTenantId && (
+                <p className="text-xs text-muted-foreground">
+                  {tenantRows.length} feedback record{tenantRows.length !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+
+            {!selectedTenantId ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">Select a customer above to view their feedback</p>
+                </CardContent>
+              </Card>
+            ) : tenantRows.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">No feedback found for this customer</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <GaugePair
+                  reportAvg={tenantReportAvg}
+                  serviceAvg={tenantServiceAvg}
+                  count={tenantRows.length}
+                />
+                <FeedbackTable rows={tenantRows} onDetail={setDetailRow} />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="team" className="mt-5 space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <SearchableSelect
+                options={memberOptions}
+                value={selectedMemberId}
+                onChange={setSelectedMemberId}
+                placeholder="Select a team member"
+                searchPlaceholder="Search team member..."
+              />
+              {selectedMemberId && (
+                <p className="text-xs text-muted-foreground">
+                  {memberRows.length} feedback record{memberRows.length !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+
+            {!selectedMemberId ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">Select a team member above to view their feedback</p>
+                </CardContent>
+              </Card>
+            ) : memberRows.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">No feedback found for this team member</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <GaugePair
+                  reportAvg={memberReportAvg}
+                  serviceAvg={memberServiceAvg}
+                  count={memberRows.length}
+                />
+                <FeedbackTable rows={memberRows} onDetail={setDetailRow} />
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {detailRow && (
+        <FeedbackDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
+      )}
+    </div>
   );
 }

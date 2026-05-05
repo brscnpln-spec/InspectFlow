@@ -284,22 +284,45 @@ export async function registerRoutes(
     const inspectionMap = new Map(inspections.map((i) => [i.id, i]));
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
 
-    const rows = responses.map((r) => {
-      const inspection = inspectionMap.get(r.inspectionId);
-      const member = userMap.get(r.serviceMemberId);
+    const grouped = new Map<string, { responses: typeof responses; inspectionId: string }>();
+    for (const r of responses) {
+      if (!grouped.has(r.inspectionId)) {
+        grouped.set(r.inspectionId, { responses: [], inspectionId: r.inspectionId });
+      }
+      grouped.get(r.inspectionId)!.responses.push(r);
+    }
+
+    const rows = Array.from(grouped.values()).map(({ inspectionId, responses: resps }) => {
+      const inspection = inspectionMap.get(inspectionId);
+      const firstResp = resps[0];
+      const member = userMap.get(firstResp.serviceMemberId);
+
+      const reportScores = resps.map((r) => r.reportScore);
+      const serviceScores = resps.filter((r) => r.serviceScore !== null).map((r) => r.serviceScore!);
+
+      const reportAvg = Math.round((reportScores.reduce((a, b) => a + b, 0) / reportScores.length) * 10) / 10;
+      const serviceAvg = serviceScores.length > 0
+        ? Math.round((serviceScores.reduce((a, b) => a + b, 0) / serviceScores.length) * 10) / 10
+        : null;
+
       return {
-        id: r.id,
-        inspectionId: r.inspectionId,
+        inspectionId,
         companyName: inspection?.companyName ?? "",
         tenantId: inspection?.tenantId ?? null,
-        memberId: r.serviceMemberId,
+        memberId: firstResp.serviceMemberId,
         memberName: member?.name ?? "Unknown",
         inspectionDate: inspection?.inspectionDate ?? null,
-        reportScore: r.reportScore,
-        serviceScore: r.serviceScore,
-        comment: r.comment,
-        respondentEmail: r.respondentEmail,
-        createdAt: r.createdAt,
+        reportAvg,
+        serviceAvg,
+        responseCount: resps.length,
+        responses: resps.map((r) => ({
+          id: r.id,
+          reportScore: r.reportScore,
+          serviceScore: r.serviceScore,
+          comment: r.comment,
+          respondentEmail: r.respondentEmail,
+          createdAt: r.createdAt,
+        })),
       };
     });
 

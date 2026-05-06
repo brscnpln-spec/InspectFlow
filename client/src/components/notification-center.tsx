@@ -126,7 +126,7 @@ export function NotificationCenter() {
           )}
         </div>
 
-        <ScrollArea className="max-h-[420px]">
+        <div className="overflow-y-auto" style={{ maxHeight: "420px" }}>
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -173,7 +173,7 @@ export function NotificationCenter() {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

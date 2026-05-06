@@ -29,10 +29,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const adminItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Inspections", url: "/inspections", icon: ClipboardList },
   { title: "Tenants", url: "/tenants", icon: Building2 },
-  { title: "Calendar", url: "/calendar", icon: CalendarDays },
+  { title: "Inspections", url: "/inspections", icon: ClipboardList },
   { title: "Emergency", url: "/emergency", icon: AlertTriangle },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Team", url: "/team", icon: Users },
   { title: "Feedback Manager", url: "/analytics", icon: BarChart3 },
 ];

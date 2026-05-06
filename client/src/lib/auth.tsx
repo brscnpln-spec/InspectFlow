@@ -55,10 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    queryClient.clear();
-    setUser(null);
-    setLocation("/");
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+    } finally {
+      queryClient.clear();
+      setUser(null);
+      setLocation("/");
+    }
   };
 
   return (

@@ -93,12 +93,27 @@ export const inspectionReports = pgTable("inspection_reports", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  targetUrl: text("target_url").notNull(),
+  relatedInspectionId: varchar("related_inspection_id"),
+  relatedTenantId: varchar("related_tenant_id"),
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  deduplicationKey: text("deduplication_key").unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertInspectionSchema = createInsertSchema(inspectionRequests).omit({ id: true, createdAt: true, updatedAt: true, status: true });
 export const insertNpsSurveySchema = createInsertSchema(npsSurveys).omit({ id: true, sentAt: true, completedAt: true });
 export const insertNpsResponseSchema = createInsertSchema(npsResponses).omit({ id: true, createdAt: true });
 export const insertInspectionReportSchema = createInsertSchema(inspectionReports).omit({ id: true, uploadedAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -117,3 +132,5 @@ export type NpsResponse = typeof npsResponses.$inferSelect;
 export type InsertNpsResponse = z.infer<typeof insertNpsResponseSchema>;
 export type InspectionReport = typeof inspectionReports.$inferSelect;
 export type InsertInspectionReport = z.infer<typeof insertInspectionReportSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;

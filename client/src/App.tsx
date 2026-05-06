@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { NotificationCenter } from "@/components/notification-center";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
@@ -70,6 +71,7 @@ function AuthenticatedLayout() {
             <span className="text-xs text-muted-foreground hidden sm:block">
               {user?.email}
             </span>
+            <NotificationCenter />
           </header>
           <main className="flex-1 overflow-hidden">
             {isAdmin ? <AdminRouter /> : <MemberRouter />}

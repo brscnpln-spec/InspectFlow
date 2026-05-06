@@ -11,7 +11,21 @@ import { randomUUID } from "crypto";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { z } from "zod";
-import { loginSchema, type InspectionRequest } from "@shared/schema";
+import { loginSchema, type InspectionRequest, type Notification } from "@shared/schema";
+
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function getTodayStr(): string { return toDateStr(new Date()); }
+function getTomorrowStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return toDateStr(d);
+}
+
+async function notify(data: Omit<Partial<Notification>, "id" | "createdAt">) {
+  try { await storage.createNotification(data); } catch {}
+}
 
 const uploadsDir = path.join("/tmp", "inspection-uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -136,11 +150,68 @@ export async function registerRoutes(
           inspectionTime: null,
         });
         console.log(`Assignment expired for inspection ${inspection.id} (${inspection.companyName})`);
+        await notify({
+          type: "assignment_expired",
+          title: "Assignment not accepted",
+          message: `${inspection.companyName} — the assigned team member did not respond within the deadline.`,
+          targetUrl: `/inspections/${inspection.id}`,
+          relatedInspectionId: inspection.id,
+          isRead: false,
+          deduplicationKey: `assignment_expired:${inspection.id}`,
+        });
       }
     } catch (e) {
       console.error("Error checking expired assignments:", e);
     }
   }, 60 * 1000);
+
+  setInterval(async () => {
+    try {
+      const overdueInspections = await storage.getOverdueInspections();
+      for (const insp of overdueInspections) {
+        await notify({
+          type: "inspection_overdue",
+          title: "Inspection overdue",
+          message: `${insp.companyName} — inspection date has passed but the inspection has not been completed within 3 business days.`,
+          targetUrl: `/inspections/${insp.id}`,
+          relatedInspectionId: insp.id,
+          isRead: false,
+          deduplicationKey: `inspection_overdue:${insp.id}:${insp.inspectionDate}`,
+        });
+      }
+
+      const expiredSurveys = await storage.getExpiredUncompletedSurveys();
+      for (const survey of expiredSurveys) {
+        const insp = await storage.getInspection(survey.inspectionId);
+        if (!insp) continue;
+        await notify({
+          type: "feedback_expired",
+          title: "Feedback form expired",
+          message: `${insp.companyName} — the feedback form expired without any response.`,
+          targetUrl: `/inspections/${insp.id}`,
+          relatedInspectionId: insp.id,
+          isRead: false,
+          deduplicationKey: `feedback_expired:${survey.id}`,
+        });
+      }
+
+      const tomorrowStr = getTomorrowStr();
+      const tomorrowInspections = await storage.getScheduledInspectionsByDate(tomorrowStr);
+      for (const insp of tomorrowInspections) {
+        await notify({
+          type: "tomorrow_reminder",
+          title: "Inspection tomorrow",
+          message: `${insp.companyName} is scheduled for tomorrow${insp.inspectionTime ? ` at ${insp.inspectionTime}` : ""}.`,
+          targetUrl: `/calendar`,
+          relatedInspectionId: insp.id,
+          isRead: false,
+          deduplicationKey: `tomorrow_reminder:${insp.id}:${tomorrowStr}`,
+        });
+      }
+    } catch (e) {
+      console.error("Error in notification scheduler:", e);
+    }
+  }, 15 * 60 * 1000);
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body);
@@ -364,6 +435,17 @@ export async function registerRoutes(
       return res.status(400).json({ message: parsed.error.errors[0].message });
     }
     const tenant = await storage.createTenant(parsed.data);
+
+    await notify({
+      type: "tenant_added",
+      title: "New tenant added",
+      message: `${tenant.companyName} has been added to the system.`,
+      targetUrl: "/tenants",
+      relatedTenantId: tenant.id,
+      isRead: false,
+      deduplicationKey: `tenant_added:${tenant.id}`,
+    });
+
     res.status(201).json(tenant);
   });
 
@@ -567,6 +649,17 @@ export async function registerRoutes(
       assignmentRespondedAt: new Date(),
     });
 
+    const member = await storage.getUser(req.session.userId!);
+    await notify({
+      type: "assignment_accepted",
+      title: "Assignment accepted",
+      message: `${member?.name ?? "A team member"} accepted the inspection for ${inspection.companyName}${inspection.inspectionDate ? ` on ${inspection.inspectionDate}` : ""}.`,
+      targetUrl: `/inspections/${inspection.id}`,
+      relatedInspectionId: inspection.id,
+      isRead: false,
+      deduplicationKey: `assignment_accepted:${inspection.id}`,
+    });
+
     res.json(updated);
   });
 
@@ -588,6 +681,17 @@ export async function registerRoutes(
       assignedServiceMemberId: null,
       inspectionDate: null,
       inspectionTime: null,
+    });
+
+    const rejectingMember = await storage.getUser(req.session.userId!);
+    await notify({
+      type: "assignment_rejected",
+      title: "Assignment rejected",
+      message: `${rejectingMember?.name ?? "A team member"} rejected the inspection assignment for ${inspection.companyName}.`,
+      targetUrl: `/inspections/${inspection.id}`,
+      relatedInspectionId: inspection.id,
+      isRead: false,
+      deduplicationKey: `assignment_rejected:${inspection.id}:${new Date().toISOString().split("T")[0]}`,
     });
 
     res.json(updated);
@@ -614,6 +718,17 @@ export async function registerRoutes(
       status: "closed",
       completionNotes: completionNotes || null,
     });
+
+    await notify({
+      type: "inspection_completed",
+      title: "Inspection completed",
+      message: `${user.name} completed the inspection for ${inspection.companyName}.`,
+      targetUrl: `/inspections/${inspection.id}`,
+      relatedInspectionId: inspection.id,
+      isRead: false,
+      deduplicationKey: `inspection_completed:${inspection.id}`,
+    });
+
     res.json(updated);
   });
 
@@ -789,6 +904,19 @@ export async function registerRoutes(
 
     await storage.updateNpsSurvey(survey.id, { completedAt: new Date() });
 
+    const respondedInspection = await storage.getInspection(survey.inspectionId);
+    if (respondedInspection) {
+      await notify({
+        type: "feedback_received",
+        title: "Feedback received",
+        message: `A feedback form was submitted for ${respondedInspection.companyName}.`,
+        targetUrl: "/analytics",
+        relatedInspectionId: respondedInspection.id,
+        isRead: false,
+        deduplicationKey: `feedback_received:${survey.id}`,
+      });
+    }
+
     res.json({ message: "Response recorded" });
   });
 
@@ -887,6 +1015,21 @@ export async function registerRoutes(
 
     await storage.deleteReport(report.id);
     res.json({ message: "Report deleted" });
+  });
+
+  app.get("/api/notifications", requireAdmin, async (req: Request, res: Response) => {
+    const notifs = await storage.getNotifications();
+    res.json(notifs);
+  });
+
+  app.patch("/api/notifications/read-all", requireAdmin, async (req: Request, res: Response) => {
+    await storage.markAllNotificationsRead();
+    res.json({ message: "All notifications marked as read" });
+  });
+
+  app.patch("/api/notifications/:id/read", requireAdmin, async (req: Request, res: Response) => {
+    await storage.markNotificationRead(req.params.id);
+    res.json({ message: "Notification marked as read" });
   });
 
   return httpServer;
@@ -1030,6 +1173,22 @@ async function pushSchema() {
 
     await dbPool.query(`
       ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS tenant_id VARCHAR;
+    `);
+
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        target_url TEXT NOT NULL,
+        related_inspection_id VARCHAR,
+        related_tenant_id VARCHAR,
+        is_read BOOLEAN NOT NULL DEFAULT false,
+        read_at TIMESTAMP,
+        deduplication_key TEXT UNIQUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
 
     console.log("Database schema verified successfully");

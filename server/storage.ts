@@ -1,4 +1,4 @@
-import { eq, and, lt, inArray } from "drizzle-orm";
+import { eq, and, lt, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import {
   tenants,
@@ -7,6 +7,7 @@ import {
   npsSurveys,
   npsResponses,
   inspectionReports,
+  notifications,
   type Tenant,
   type InsertTenant,
   type User,
@@ -19,6 +20,7 @@ import {
   type InsertNpsResponse,
   type InspectionReport,
   type InsertInspectionReport,
+  type Notification,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -45,11 +47,14 @@ export interface IStorage {
   createInspection(data: Partial<InspectionRequest>): Promise<InspectionRequest>;
   updateInspection(id: string, data: Partial<InspectionRequest>): Promise<InspectionRequest | undefined>;
   getPendingExpiredAssignments(): Promise<InspectionRequest[]>;
+  getOverdueInspections(): Promise<InspectionRequest[]>;
+  getScheduledInspectionsByDate(dateStr: string): Promise<InspectionRequest[]>;
 
   createNpsSurvey(data: InsertNpsSurvey): Promise<NpsSurvey>;
   getNpsSurveyByToken(token: string): Promise<NpsSurvey | undefined>;
   getNpsSurveyByInspection(inspectionId: string): Promise<NpsSurvey | undefined>;
   updateNpsSurvey(id: string, data: Partial<NpsSurvey>): Promise<void>;
+  getExpiredUncompletedSurveys(): Promise<NpsSurvey[]>;
 
   createNpsResponse(data: InsertNpsResponse): Promise<NpsResponse>;
   getNpsResponses(): Promise<NpsResponse[]>;
@@ -60,6 +65,13 @@ export interface IStorage {
   getReportsByUploader(inspectionId: string, uploadedById: string): Promise<InspectionReport[]>;
   getReport(id: string): Promise<InspectionReport | undefined>;
   deleteReport(id: string): Promise<void>;
+
+  getNotifications(): Promise<Notification[]>;
+  getUnreadNotificationCount(): Promise<number>;
+  createNotification(data: Partial<Notification>): Promise<Notification | null>;
+  markNotificationRead(id: string): Promise<void>;
+  markAllNotificationsRead(): Promise<void>;
+  notificationExists(deduplicationKey: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -166,6 +178,31 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
+  async getOverdueInspections(): Promise<InspectionRequest[]> {
+    const threeBizDaysAgo = new Date();
+    let daysBack = 0;
+    let counted = 0;
+    while (counted < 3) {
+      threeBizDaysAgo.setDate(threeBizDaysAgo.getDate() - 1);
+      daysBack++;
+      const dow = threeBizDaysAgo.getDay();
+      if (dow !== 0 && dow !== 6) counted++;
+    }
+    const cutoffStr = `${threeBizDaysAgo.getFullYear()}-${String(threeBizDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(threeBizDaysAgo.getDate()).padStart(2, "0")}`;
+
+    const all = await db.select().from(inspectionRequests).where(
+      eq(inspectionRequests.status, "scheduled")
+    );
+    return all.filter(i => i.inspectionDate && i.inspectionDate <= cutoffStr);
+  }
+
+  async getScheduledInspectionsByDate(dateStr: string): Promise<InspectionRequest[]> {
+    const all = await db.select().from(inspectionRequests).where(
+      eq(inspectionRequests.status, "scheduled")
+    );
+    return all.filter(i => i.inspectionDate === dateStr);
+  }
+
   async createNpsSurvey(data: InsertNpsSurvey): Promise<NpsSurvey> {
     const [survey] = await db.insert(npsSurveys).values(data).returning();
     return survey;
@@ -183,6 +220,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateNpsSurvey(id: string, data: Partial<NpsSurvey>): Promise<void> {
     await db.update(npsSurveys).set(data).where(eq(npsSurveys.id, id));
+  }
+
+  async getExpiredUncompletedSurveys(): Promise<NpsSurvey[]> {
+    return db.select().from(npsSurveys).where(
+      and(
+        lt(npsSurveys.expiresAt, new Date()),
+      )
+    ).then(rows => rows.filter(s => !s.completedAt));
   }
 
   async createNpsResponse(data: InsertNpsResponse): Promise<NpsResponse> {
@@ -225,6 +270,41 @@ export class DatabaseStorage implements IStorage {
 
   async deleteReport(id: string): Promise<void> {
     await db.delete(inspectionReports).where(eq(inspectionReports.id, id));
+  }
+
+  async getNotifications(): Promise<Notification[]> {
+    return db.select().from(notifications).orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadNotificationCount(): Promise<number> {
+    const rows = await db.select().from(notifications).where(eq(notifications.isRead, false));
+    return rows.length;
+  }
+
+  async createNotification(data: Partial<Notification>): Promise<Notification | null> {
+    if (data.deduplicationKey) {
+      const exists = await this.notificationExists(data.deduplicationKey);
+      if (exists) return null;
+    }
+    try {
+      const [notif] = await db.insert(notifications).values(data as any).returning();
+      return notif;
+    } catch {
+      return null;
+    }
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    await db.update(notifications).set({ isRead: true, readAt: new Date() }).where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await db.update(notifications).set({ isRead: true, readAt: new Date() }).where(eq(notifications.isRead, false));
+  }
+
+  async notificationExists(deduplicationKey: string): Promise<boolean> {
+    const [row] = await db.select({ id: notifications.id }).from(notifications).where(eq(notifications.deduplicationKey, deduplicationKey));
+    return !!row;
   }
 }
 

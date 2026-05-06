@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import type { InspectionRequest, User } from "@shared/schema";
@@ -38,6 +38,31 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
+function nextBusinessDay(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  if (day === 6) d.setDate(d.getDate() + 2);
+  else if (day === 0) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function toDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+type CalendarEvent = {
+  inspection: InspectionRequest;
+  date: string;
+  isRecurring: boolean;
+  occurrenceNum: number;
+};
+
+const MAX_RECURRING_OCCURRENCES = 60;
+const RECURRING_YEARS_AHEAD = 3;
+
 export default function CalendarPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -63,16 +88,38 @@ export default function CalendarPage() {
     return map;
   }, [members]);
 
-  const inspectionsByDate = useMemo(() => {
-    const map = new Map<string, InspectionRequest[]>();
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
     if (!inspections) return map;
+
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() + RECURRING_YEARS_AHEAD);
+
+    const addEvent = (event: CalendarEvent) => {
+      const existing = map.get(event.date) ?? [];
+      existing.push(event);
+      map.set(event.date, existing);
+    };
+
     inspections.forEach((insp) => {
-      if (insp.inspectionDate) {
-        const existing = map.get(insp.inspectionDate) || [];
-        existing.push(insp);
-        map.set(insp.inspectionDate, existing);
+      if (!insp.inspectionDate) return;
+
+      addEvent({ inspection: insp, date: insp.inspectionDate, isRecurring: false, occurrenceNum: 0 });
+
+      if (insp.recurringDays && insp.recurringDays > 0) {
+        const baseDate = new Date(`${insp.inspectionDate}T12:00:00`);
+        const msPerDay = 86_400_000;
+
+        for (let n = 1; n <= MAX_RECURRING_OCCURRENCES; n++) {
+          const rawDate = new Date(baseDate.getTime() + n * insp.recurringDays * msPerDay);
+          if (rawDate > cutoff) break;
+
+          const adjusted = nextBusinessDay(rawDate);
+          addEvent({ inspection: insp, date: toDateStr(adjusted), isRecurring: true, occurrenceNum: n });
+        }
       }
     });
+
     return map;
   }, [inspections]);
 
@@ -80,21 +127,13 @@ export default function CalendarPage() {
   const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
 
   const prevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
-    } else {
-      setCurrentMonth(currentMonth - 1);
-    }
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
+    else setCurrentMonth(currentMonth - 1);
   };
 
   const nextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(currentMonth + 1);
-    }
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
+    else setCurrentMonth(currentMonth + 1);
   };
 
   const goToToday = () => {
@@ -102,24 +141,17 @@ export default function CalendarPage() {
     setCurrentYear(today.getFullYear());
   };
 
-  const getColorForMember = (memberId: string | null) => {
-    if (!memberId) return UNASSIGNED_COLOR;
-    return memberColorMap.get(memberId) || UNASSIGNED_COLOR;
-  };
+  const getColorForMember = (memberId: string | null) =>
+    memberId ? (memberColorMap.get(memberId) ?? UNASSIGNED_COLOR) : UNASSIGNED_COLOR;
 
   const getMemberName = (memberId: string | null) => {
     if (!memberId || !members) return "Unassigned";
-    const member = members.find((m) => m.id === memberId);
-    return member?.name || "Unknown";
+    return members.find((m) => m.id === memberId)?.name ?? "Unknown";
   };
 
-  const calendarCells = [];
-  for (let i = 0; i < firstDay; i++) {
-    calendarCells.push(null);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    calendarCells.push(d);
-  }
+  const calendarCells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) calendarCells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) calendarCells.push(d);
 
   if (loadingInspections) {
     return (
@@ -172,6 +204,10 @@ export default function CalendarPage() {
                 <span className={`w-3 h-3 rounded-full ${UNASSIGNED_COLOR.dot}`} />
                 <span className="font-medium text-muted-foreground">Unassigned</span>
               </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-l pl-3">
+                <RefreshCw className="w-3 h-3" />
+                <span>Recurring</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -193,7 +229,7 @@ export default function CalendarPage() {
               }
 
               const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-              const dayInspections = inspectionsByDate.get(dateStr) || [];
+              const dayEvents = eventsByDate.get(dateStr) ?? [];
               const isToday =
                 day === today.getDate() &&
                 currentMonth === today.getMonth() &&
@@ -213,27 +249,31 @@ export default function CalendarPage() {
                     >
                       {day}
                     </span>
-                    {dayInspections.length > 0 && (
+                    {dayEvents.length > 0 && (
                       <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                        {dayInspections.length}
+                        {dayEvents.length}
                       </Badge>
                     )}
                   </div>
                   <div className="space-y-1">
-                    {dayInspections.slice(0, 3).map((insp) => {
+                    {dayEvents.slice(0, 3).map((event) => {
+                      const { inspection: insp, isRecurring, occurrenceNum } = event;
                       const color = getColorForMember(insp.assignedServiceMemberId);
                       const isPending = insp.assignmentStatus === "pending";
                       return (
                         <Link
-                          key={insp.id}
+                          key={`${insp.id}-${occurrenceNum}`}
                           href={`/inspections/${insp.id}`}
-                          data-testid={`calendar-event-${insp.id}`}
+                          data-testid={`calendar-event-${insp.id}${isRecurring ? `-r${occurrenceNum}` : ""}`}
                         >
                           <div
-                            className={`${color.bg} ${color.text} border-l-2 ${color.border} rounded-r px-1.5 py-0.5 text-[10px] leading-tight cursor-pointer hover:opacity-80 transition-opacity truncate ${isPending ? "opacity-40 border-dashed" : ""}`}
+                            className={`${color.bg} ${color.text} border-l-2 ${color.border} rounded-r px-1.5 py-0.5 text-[10px] leading-tight cursor-pointer hover:opacity-80 transition-opacity truncate ${
+                              isPending ? "opacity-40 border-dashed" : ""
+                            } ${isRecurring ? "opacity-75" : ""}`}
                           >
                             <div className="font-semibold truncate flex items-center gap-0.5">
                               {isPending && <Clock className="w-2.5 h-2.5 flex-shrink-0" />}
+                              {isRecurring && <RefreshCw className="w-2.5 h-2.5 flex-shrink-0 opacity-70" />}
                               {insp.companyName}
                             </div>
                             {isAdmin && (
@@ -251,9 +291,9 @@ export default function CalendarPage() {
                         </Link>
                       );
                     })}
-                    {dayInspections.length > 3 && (
+                    {dayEvents.length > 3 && (
                       <div className="text-[10px] text-muted-foreground text-center">
-                        +{dayInspections.length - 3} more
+                        +{dayEvents.length - 3} more
                       </div>
                     )}
                   </div>

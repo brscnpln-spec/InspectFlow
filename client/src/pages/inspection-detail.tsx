@@ -346,7 +346,8 @@ export default function InspectionDetailPage() {
     );
   }
 
-  const canUploadReport = !isAdmin && (inspection.status === "scheduled" || inspection.status === "closed");
+  const isFinalClosed = inspection.status === "final_closed";
+  const canUploadReport = !isFinalClosed && (isAdmin || inspection.status === "scheduled" || inspection.status === "closed");
 
   return (
     <div className="p-6 overflow-auto h-full">
@@ -748,7 +749,7 @@ export default function InspectionDetailPage() {
               </DialogContent>
             </Dialog>
 
-            {isAdmin && inspection.status !== "closed" && inspection.status !== "final_closed" && (
+            {isAdmin && !isFinalClosed && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1157,7 +1158,7 @@ export default function InspectionDetailPage() {
                       >
                         <Download className="w-4 h-4" />
                       </Button>
-                      {(!isAdmin && report.uploadedById === user?.id && inspection.status === "scheduled") && (
+                      {!isFinalClosed && (isAdmin || (!isAdmin && report.uploadedById === user?.id && inspection.status === "scheduled")) && (
                         <Button
                           variant="ghost"
                           size="sm"

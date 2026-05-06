@@ -477,8 +477,8 @@ export async function registerRoutes(
     const existing = await storage.getInspection(req.params.id);
     if (!existing) return res.status(404).json({ message: "Not found" });
 
-    if (existing.status === "closed" || existing.status === "final_closed") {
-      return res.status(400).json({ message: "Cannot edit a closed inspection" });
+    if (existing.status === "final_closed") {
+      return res.status(400).json({ message: "Cannot edit a final closed inspection" });
     }
 
     const data = parsed.data;
@@ -810,6 +810,10 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
+    if (inspection.status === "final_closed") {
+      return res.status(400).json({ message: "Cannot upload reports for a final closed inspection" });
+    }
+
     if (user.role !== "admin" && inspection.assignedServiceMemberId !== user.id) {
       return res.status(403).json({ message: "You are not assigned to this inspection" });
     }
@@ -869,6 +873,11 @@ export async function registerRoutes(
 
     if (report.uploadedById !== user.id && user.role !== "admin") {
       return res.status(403).json({ message: "Access denied" });
+    }
+
+    const inspection = await storage.getInspection(report.inspectionId);
+    if (inspection?.status === "final_closed") {
+      return res.status(400).json({ message: "Cannot delete reports from a final closed inspection" });
     }
 
     const filePath = path.join(uploadsDir, report.fileName);

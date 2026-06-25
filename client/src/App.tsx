@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,46 +9,62 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { NotificationCenter } from "@/components/notification-center";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
+
+// Eagerly-loaded pages (always needed immediately)
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
-import DashboardPage from "@/pages/dashboard";
-import InspectionsPage from "@/pages/inspections";
-import InspectionFormPage from "@/pages/inspection-form";
-import InspectionDetailPage from "@/pages/inspection-detail";
-import EmergencyPage from "@/pages/emergency";
-import TeamPage from "@/pages/team";
-import AnalyticsPage from "@/pages/analytics";
-import MemberInspectionsPage from "@/pages/member-inspections";
 import NpsSurveyPage from "@/pages/nps-survey";
-import CalendarPage from "@/pages/calendar";
-import TenantsPage from "@/pages/tenants";
+
+// Lazily-loaded pages (loaded only when the user navigates there)
+const DashboardPage        = lazy(() => import("@/pages/dashboard"));
+const InspectionsPage      = lazy(() => import("@/pages/inspections"));
+const InspectionFormPage   = lazy(() => import("@/pages/inspection-form"));
+const InspectionDetailPage = lazy(() => import("@/pages/inspection-detail"));
+const EmergencyPage        = lazy(() => import("@/pages/emergency"));
+const TeamPage             = lazy(() => import("@/pages/team"));
+const AnalyticsPage        = lazy(() => import("@/pages/analytics"));
+const MemberInspectionsPage = lazy(() => import("@/pages/member-inspections"));
+const CalendarPage         = lazy(() => import("@/pages/calendar"));
+const TenantsPage          = lazy(() => import("@/pages/tenants"));
+
+function PageLoader() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-[#ffb800]" />
+    </div>
+  );
+}
 
 function AdminRouter() {
   return (
-    <Switch>
-      <Route path="/" component={DashboardPage} />
-      <Route path="/inspections" component={InspectionsPage} />
-      <Route path="/inspections/new" component={InspectionFormPage} />
-      <Route path="/inspections/:id" component={InspectionDetailPage} />
-      <Route path="/tenants" component={TenantsPage} />
-      <Route path="/emergency" component={EmergencyPage} />
-      <Route path="/team" component={TeamPage} />
-      <Route path="/analytics" component={AnalyticsPage} />
-      <Route path="/calendar" component={CalendarPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={DashboardPage} />
+        <Route path="/inspections" component={InspectionsPage} />
+        <Route path="/inspections/new" component={InspectionFormPage} />
+        <Route path="/inspections/:id" component={InspectionDetailPage} />
+        <Route path="/tenants" component={TenantsPage} />
+        <Route path="/emergency" component={EmergencyPage} />
+        <Route path="/team" component={TeamPage} />
+        <Route path="/analytics" component={AnalyticsPage} />
+        <Route path="/calendar" component={CalendarPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
 function MemberRouter() {
   return (
-    <Switch>
-      <Route path="/" component={MemberInspectionsPage} />
-      <Route path="/inspections/:id" component={InspectionDetailPage} />
-      <Route path="/tenants" component={TenantsPage} />
-      <Route path="/calendar" component={CalendarPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={MemberInspectionsPage} />
+        <Route path="/inspections/:id" component={InspectionDetailPage} />
+        <Route path="/tenants" component={TenantsPage} />
+        <Route path="/calendar" component={CalendarPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

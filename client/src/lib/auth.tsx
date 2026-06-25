@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, setCsrfToken } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 
 interface AuthContextType {
@@ -23,11 +23,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
-        setUser(data);
+        const { csrfToken, ...userData } = data;
+        if (csrfToken) setCsrfToken(csrfToken);
+        setUser(userData);
       } else {
+        setCsrfToken(null);
         setUser(null);
       }
     } catch {
+      setCsrfToken(null);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -50,7 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(data.message || "Login failed");
     }
     const data = await res.json();
-    setUser(data);
+    const { csrfToken, ...userData } = data;
+    if (csrfToken) setCsrfToken(csrfToken);
+    setUser(userData);
     setLocation("/");
   };
 
@@ -59,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {
     } finally {
+      setCsrfToken(null);
       queryClient.clear();
       setUser(null);
       setLocation("/");

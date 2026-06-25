@@ -52,6 +52,33 @@ const ALLOWED_MIME_TYPES = new Set([
   "text/plain",
 ]);
 
+const MAGIC_BYTES: Record<string, number[][]> = {
+  "application/pdf":        [[0x25, 0x50, 0x44, 0x46]],
+  "application/msword":     [[0xD0, 0xCF, 0x11, 0xE0]],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    [0x50, 0x4B, 0x03, 0x04], [0x50, 0x4B, 0x05, 0x06], [0x50, 0x4B, 0x07, 0x08],
+  ],
+  "application/vnd.ms-excel":   [[0xD0, 0xCF, 0x11, 0xE0]],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+    [0x50, 0x4B, 0x03, 0x04], [0x50, 0x4B, 0x05, 0x06], [0x50, 0x4B, 0x07, 0x08],
+  ],
+  "image/jpeg":  [[0xFF, 0xD8, 0xFF]],
+  "image/png":   [[0x89, 0x50, 0x4E, 0x47]],
+  "image/gif":   [[0x47, 0x49, 0x46, 0x38]],
+  "image/webp":  [[0x52, 0x49, 0x46, 0x46]],
+  "text/plain":  [],
+};
+
+function validateMagicBytes(filePath: string, mimeType: string): boolean {
+  const sigs = MAGIC_BYTES[mimeType];
+  if (sigs === undefined) return false;
+  if (sigs.length === 0) return true;
+  const buf = Buffer.alloc(8);
+  const fd = fs.openSync(filePath, "r");
+  try { fs.readSync(fd, buf, 0, 8, 0); } finally { fs.closeSync(fd); }
+  return sigs.some(sig => sig.every((b, i) => buf[i] === b));
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
@@ -117,12 +144,21 @@ const npsResponseSchema = z.object({
 declare module "express-session" {
   interface SessionData {
     userId: string;
+    csrfToken: string;
   }
 }
 
 function requireAuth(req: Request, res: Response, next: Function) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+}
+
+function requireCsrf(req: Request, res: Response, next: Function) {
+  const token = req.headers["x-csrf-token"];
+  if (!token || token !== req.session.csrfToken) {
+    return res.status(403).json({ message: "Invalid CSRF token" });
   }
   next();
 }
@@ -210,6 +246,18 @@ export async function registerRoutes(
     await seedDatabase();
   }
 
+  // CSRF protection: all authenticated non-GET mutations require matching X-CSRF-Token header
+  app.use((req: Request, res: Response, next: Function) => {
+    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+    if (!req.session.userId) return next();  // unauthenticated (login/survey) — no session to forge
+    if (req.path === "/api/auth/logout") return next();  // logout is benign without CSRF
+    const token = req.headers["x-csrf-token"];
+    if (!token || token !== req.session.csrfToken) {
+      return res.status(403).json({ message: "Invalid CSRF token" });
+    }
+    next();
+  });
+
   setInterval(async () => {
     try {
       const expired = await storage.getPendingExpiredAssignments();
@@ -296,8 +344,9 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Invalid credentials" });
     }
     req.session.userId = user.id;
+    req.session.csrfToken = randomUUID();
     const { password: _, ...safeUser } = user;
-    res.json(safeUser);
+    res.json({ ...safeUser, csrfToken: req.session.csrfToken });
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
@@ -308,8 +357,11 @@ export async function registerRoutes(
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
+    if (!req.session.csrfToken) {
+      req.session.csrfToken = randomUUID();
+    }
     const { password: _, ...safeUser } = user;
-    res.json(safeUser);
+    res.json({ ...safeUser, csrfToken: req.session.csrfToken });
   });
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {
@@ -528,6 +580,13 @@ export async function registerRoutes(
     res.status(201).json(tenant);
   });
 
+  // Members may only update contact fields for tenants linked to their inspections.
+  // Admins may update all fields (full tenantSchema).
+  const tenantMemberSchema = tenantSchema.pick({
+    contactPerson1: true, phone1: true, email1: true,
+    contactPerson2: true, phone2: true, email2: true,
+  });
+
   app.patch("/api/tenants/:id", requireAuth, async (req: Request, res: Response) => {
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
@@ -539,6 +598,14 @@ export async function registerRoutes(
       const inspections = await storage.getInspectionsByServiceMember(user.id);
       const allowed = inspections.some(i => i.tenantId === existing.id);
       if (!allowed) return res.status(403).json({ message: "Access denied" });
+
+      // Members can only update contact info, not company identifiers
+      const parsed = tenantMemberSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const tenant = await storage.updateTenant(pid(req.params.id), { ...existing, ...parsed.data });
+      return res.json(tenant);
     }
 
     const parsed = tenantSchema.safeParse(req.body);
@@ -1010,6 +1077,13 @@ export async function registerRoutes(
 
     if (user.role !== "admin" && inspection.assignedServiceMemberId !== user.id) {
       return res.status(403).json({ message: "You are not assigned to this inspection" });
+    }
+
+    // Magic byte validation — verify actual file content matches declared MIME type
+    const uploadedFilePath = path.join(uploadsDir, req.file.filename);
+    if (!validateMagicBytes(uploadedFilePath, req.file.mimetype)) {
+      fs.unlinkSync(uploadedFilePath);
+      return res.status(400).json({ message: "File content does not match its declared type." });
     }
 
     const report = await storage.createInspectionReport({

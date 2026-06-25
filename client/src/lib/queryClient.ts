@@ -1,5 +1,10 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// CSRF token — populated by auth layer after login/me
+let _csrfToken: string | null = null;
+export function setCsrfToken(token: string | null) { _csrfToken = token; }
+export function getCsrfToken() { return _csrfToken; }
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,9 +17,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const isMutation = !["GET", "HEAD"].includes(method.toUpperCase());
+  const headers: Record<string, string> = {};
+  if (data) headers["Content-Type"] = "application/json";
+  if (isMutation && _csrfToken) headers["X-CSRF-Token"] = _csrfToken;
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

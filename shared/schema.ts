@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,12 +28,12 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   role: userRoleEnum("role").notNull().default("service_member"),
-  assignedAdminId: varchar("assigned_admin_id"),
+  assignedAdminId: varchar("assigned_admin_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
 });
 
 export const inspectionRequests = pgTable("inspection_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id"),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
   companyName: text("company_name").notNull(),
   contactPerson1: text("contact_person_1").notNull(),
   contactPerson2: text("contact_person_2").notNull(),
@@ -43,8 +43,8 @@ export const inspectionRequests = pgTable("inspection_requests", {
   email2: text("email_2").notNull(),
   notes: text("notes"),
   status: inspectionStatusEnum("status").notNull().default("new"),
-  assignedServiceMemberId: varchar("assigned_service_member_id"),
-  assignedByAdminId: varchar("assigned_by_admin_id"),
+  assignedServiceMemberId: varchar("assigned_service_member_id").references(() => users.id, { onDelete: "set null" }),
+  assignedByAdminId: varchar("assigned_by_admin_id").references(() => users.id, { onDelete: "set null" }),
   inspectionDate: text("inspection_date"),
   inspectionTime: text("inspection_time"),
   reportUrl: text("report_url"),
@@ -61,19 +61,19 @@ export const inspectionRequests = pgTable("inspection_requests", {
 
 export const npsSurveys = pgTable("nps_surveys", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  inspectionId: varchar("inspection_id").notNull(),
+  inspectionId: varchar("inspection_id").notNull().references(() => inspectionRequests.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   sentAt: timestamp("sent_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   expiresAt: timestamp("expires_at").notNull(),
-  triggeredBy: varchar("triggered_by"),
+  triggeredBy: varchar("triggered_by").references(() => users.id, { onDelete: "set null" }),
   isManual: boolean("is_manual").default(false),
 });
 
 export const npsResponses = pgTable("nps_responses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  surveyId: varchar("survey_id").notNull(),
-  inspectionId: varchar("inspection_id").notNull(),
+  surveyId: varchar("survey_id").notNull().references(() => npsSurveys.id, { onDelete: "cascade" }),
+  inspectionId: varchar("inspection_id").notNull().references(() => inspectionRequests.id, { onDelete: "no action" }),
   serviceMemberId: varchar("service_member_id").notNull(),
   reportScore: integer("report_score").notNull(),
   serviceScore: integer("service_score"),
@@ -84,8 +84,8 @@ export const npsResponses = pgTable("nps_responses", {
 
 export const inspectionReports = pgTable("inspection_reports", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  inspectionId: varchar("inspection_id").notNull(),
-  uploadedById: varchar("uploaded_by_id").notNull(),
+  inspectionId: varchar("inspection_id").notNull().references(() => inspectionRequests.id, { onDelete: "cascade" }),
+  uploadedById: varchar("uploaded_by_id").notNull().references(() => users.id, { onDelete: "no action" }),
   fileName: text("file_name").notNull(),
   originalName: text("original_name").notNull(),
   mimeType: text("mime_type").notNull(),
@@ -99,8 +99,8 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   targetUrl: text("target_url").notNull(),
-  relatedInspectionId: varchar("related_inspection_id"),
-  relatedTenantId: varchar("related_tenant_id"),
+  relatedInspectionId: varchar("related_inspection_id").references(() => inspectionRequests.id, { onDelete: "set null" }),
+  relatedTenantId: varchar("related_tenant_id").references(() => tenants.id, { onDelete: "set null" }),
   isRead: boolean("is_read").notNull().default(false),
   readAt: timestamp("read_at"),
   deduplicationKey: text("deduplication_key").unique(),

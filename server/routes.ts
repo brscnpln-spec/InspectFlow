@@ -34,7 +34,8 @@ async function notify(data: Omit<Partial<Notification>, "id" | "createdAt">) {
   try { await storage.createNotification(data); } catch {}
 }
 
-const uploadsDir = path.join("/tmp", "inspection-uploads");
+// Persistent upload directory — lives inside the project root, git-ignored via uploads/
+const uploadsDir = path.resolve("uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -1122,7 +1123,11 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const filePath = path.join(uploadsDir, report.fileName);
+    // Directory traversal guard — ensure resolved path stays inside uploadsDir
+    const filePath = path.resolve(uploadsDir, report.fileName);
+    if (!filePath.startsWith(path.resolve(uploadsDir) + path.sep)) {
+      return res.status(400).json({ message: "Invalid file path" });
+    }
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "File not found on server" });
     }

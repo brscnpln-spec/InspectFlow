@@ -1,12 +1,28 @@
 import { storage } from "./storage";
 import { hashPassword } from "./auth";
+import crypto from "crypto";
+
+/**
+ * Read a seed password from the environment, or generate a random one.
+ * Generated passwords are printed ONCE so the developer can set them.
+ * Never falls back to a known default string so the repo stays credential-free.
+ */
+function resolveSeedPassword(envVar: string): string {
+  const val = process.env[envVar]?.trim();
+  if (val) return val;
+  const generated = crypto.randomBytes(16).toString("hex");
+  console.warn(`\n[seed] WARNING: ${envVar} is not set.`);
+  console.warn(`[seed] Generated a random password: ${generated}`);
+  console.warn(`[seed] Add ${envVar}=<password> to your environment to fix seed credentials.\n`);
+  return generated;
+}
 
 export async function seedDatabase() {
   const existingAdmin = await storage.getUserByUsername("tanweer");
   if (existingAdmin) return;
 
-  const adminPassword = await hashPassword("admin123");
-  const memberPassword = await hashPassword("member123");
+  const adminPassword = await hashPassword(resolveSeedPassword("SEED_ADMIN_PASSWORD"));
+  const memberPassword = await hashPassword(resolveSeedPassword("SEED_MEMBER_PASSWORD"));
 
   const admin1 = await storage.createUser({
     username: "tanweer",

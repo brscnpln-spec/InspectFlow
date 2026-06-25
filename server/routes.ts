@@ -32,6 +32,19 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "text/plain",
+]);
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
@@ -41,6 +54,13 @@ const upload = multer({
     },
   }),
   limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("File type not allowed. Accepted: PDF, Word, Excel, images, plain text."));
+    }
+  },
 });
 
 const tenantSchema = z.object({
@@ -83,8 +103,8 @@ const assignSchema = z.object({
 const npsResponseSchema = z.object({
   reportScore: z.number().min(0).max(10),
   serviceScore: z.number().min(0).max(10).optional().nullable(),
-  comment: z.string().optional().nullable(),
-  respondentEmail: z.string().optional().nullable(),
+  comment: z.string().max(2000).optional().nullable(),
+  respondentEmail: z.string().email().optional().nullable(),
 });
 
 declare module "express-session" {
@@ -117,19 +137,33 @@ export async function registerRoutes(
 ): Promise<Server> {
   const PgStore = connectPgSimple(session);
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    throw new Error("SESSION_SECRET environment variable is required");
+  }
+
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    next();
+  });
+
   app.use(
     session({
       store: new PgStore({
         pool: pool,
         createTableIfMissing: true,
       }),
-      secret: process.env.SESSION_SECRET || "inspectflow-secret-key",
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
       },
     })
@@ -319,7 +353,7 @@ export async function registerRoutes(
       if (dup) return res.status(400).json({ message: "Username already exists" });
     }
 
-    const updateData: any = {};
+    const updateData: Partial<Pick<typeof existingUser, "name" | "email" | "role" | "username" | "assignedAdminId" | "password">> = {};
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (role) updateData.role = role;
@@ -593,10 +627,7 @@ export async function registerRoutes(
     const inspection = await storage.updateInspection(req.params.id, updateData);
 
     if (serviceMemberChanged && data.assignedServiceMemberId) {
-      const newMember = await storage.getUser(data.assignedServiceMemberId);
-      if (newMember) {
-        console.log(`[EMAIL NOTIFICATION] New assignment for ${newMember.name} (${newMember.email}): Inspection ${existing.companyName} has been assigned to you.`);
-      }
+      // TODO: Send assignment notification email to service member
     }
 
     res.json(inspection);
@@ -772,13 +803,7 @@ export async function registerRoutes(
     }
 
     const reportNames = reports.map(r => r.originalName).join(", ");
-    console.log(`[EMAIL NOTIFICATION] Final Close - To: ${existing.email1}${existing.email2 ? `, ${existing.email2}` : ""}`);
-    console.log(`  Company: ${existing.companyName}`);
-    console.log(`  Inspection Date: ${existing.inspectionDate} ${existing.inspectionTime || ""}`);
-    console.log(`  Service Member: ${existing.assignedServiceMemberId}`);
-    console.log(`  Reports: ${reportNames}`);
-    console.log(`  Admin Notes: ${adminNotes.trim()}`);
-    console.log(`  NPS Survey: ${npsSurveyUrl}`);
+    // TODO: Send final close email to contacts with NPS survey link
 
     res.json({ ...inspection, npsSurveyUrl });
   });
@@ -808,10 +833,7 @@ export async function registerRoutes(
       isManual: true,
     });
 
-    console.log(`[EMAIL NOTIFICATION] NPS Survey - To: ${inspection.email1}, ${inspection.email2}`);
-    console.log(`  Company: ${inspection.companyName}`);
-    console.log(`  Contacts: ${inspection.contactPerson1}, ${inspection.contactPerson2}`);
-    console.log(`  NPS Survey: /survey/${token}`);
+    // TODO: Send NPS survey email to inspection contacts
 
     res.json({ survey, surveyUrl: `/survey/${token}` });
   });
@@ -841,7 +863,6 @@ export async function registerRoutes(
     await storage.updateNpsSurvey(survey.id, { expiresAt: newExpiresAt });
 
     const fullUrl = `/survey/${survey.token}`;
-    console.log(`[NPS REACTIVATED] Inspection: ${req.params.id}, New Expiry: ${newExpiresAt.toISOString()}`);
     res.json({ survey: { ...survey, expiresAt: newExpiresAt }, surveyUrl: fullUrl, isActive: true });
   });
 
@@ -987,7 +1008,8 @@ export async function registerRoutes(
       return res.status(404).json({ message: "File not found on server" });
     }
 
-    res.setHeader("Content-Disposition", `attachment; filename="${report.originalName}"`);
+    const safeFileName = report.originalName.replace(/[^\w\s.\-()]/g, "_");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFileName}"`);
     res.setHeader("Content-Type", report.mimeType);
     res.sendFile(filePath);
   });

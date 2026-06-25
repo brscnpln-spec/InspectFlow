@@ -5,3 +5,32 @@ server/public
 vite.config.ts.*
 *.tar.gz
 uploads/
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+.env.development
+
+# Runtime uploads (stored in /tmp)
+/tmp/inspection-uploads/
+
+# Editor and OS artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+
+# Replit internals
+.cache/
+.upm/
+.local/
+.agents/
+
+# User-uploaded prompt/document assets — not part of source
+attached_assets/
+
+# Logs
+*.log
+npm-debug.log*

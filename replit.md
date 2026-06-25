@@ -16,8 +16,10 @@ An internal workflow tool for managing OGI inspection requests from customer int
 - Black: #000000
 
 ## User Roles
-- **Admin** (2 users: tanweer/admin123, sanjeev/admin123): Full system access, create/assign inspections, trigger NPS, view analytics, notification center
-- **Service Member** (10 users: ravi, priya, amit, neha, vikram, arun, sneha, rahul, deepa, kiran / all password: member123): View assigned inspections, complete inspections
+- **Admin**: Full system access, create/assign inspections, trigger NPS, view analytics, notification center
+- **Service Member**: View assigned inspections, complete inspections
+
+> Seed credentials are defined in `server/seed.ts` and only applied in non-production environments (`NODE_ENV !== "production"`). Change these before any real deployment.
 
 ## Key Features
 1. Inspection request CRUD with status workflow (New → Scheduled → Closed → Final Closed)

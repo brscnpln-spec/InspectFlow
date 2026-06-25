@@ -76,12 +76,12 @@ export async function seedDatabase() {
     { name: "Arabian Gas Works", contact1: "Omar Al-Hassan", contact2: "Fatima Al-Said", phone1: "+971-555-0501", phone2: "+971-555-0502", email1: "omar@agw.com", email2: "fatima@agw.com" },
   ];
 
-  const inspections = [
-    { ...companies[0], member: members[0], admin: admin1, status: "scheduled" as const, date: "2026-03-05", time: "09:00", recurring: 45 },
-    { ...companies[1], member: members[1], admin: admin1, status: "new" as const, date: null, time: null, recurring: 60 },
-    { ...companies[2], member: members[2], admin: admin1, status: "closed" as const, date: "2026-02-20", time: "14:00", recurring: 45 },
-    { ...companies[3], member: members[5], admin: admin2, status: "final_closed" as const, date: "2026-02-15", time: "10:30", recurring: 60 },
-    { ...companies[4], member: members[6], admin: admin2, status: "scheduled" as const, date: "2026-03-10", time: "11:00", recurring: null, emergency: true },
+  const inspections: Array<typeof companies[0] & { member: typeof members[0]; admin: typeof admin1; status: "new" | "scheduled" | "closed" | "final_closed"; date: string | null; time: string | null; recurring: number | null; emergency?: boolean }> = [
+    { ...companies[0], member: members[0], admin: admin1, status: "scheduled", date: "2026-03-05", time: "09:00", recurring: 45 },
+    { ...companies[1], member: members[1], admin: admin1, status: "new", date: null, time: null, recurring: 60 },
+    { ...companies[2], member: members[2], admin: admin1, status: "closed", date: "2026-02-20", time: "14:00", recurring: 45 },
+    { ...companies[3], member: members[5], admin: admin2, status: "final_closed", date: "2026-02-15", time: "10:30", recurring: 60 },
+    { ...companies[4], member: members[6], admin: admin2, status: "scheduled", date: "2026-03-10", time: "11:00", recurring: null, emergency: true },
   ];
 
   for (const ins of inspections) {

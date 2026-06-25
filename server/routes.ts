@@ -12,6 +12,13 @@ import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { z } from "zod";
 import { loginSchema, type InspectionRequest, type Notification } from "@shared/schema";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+
+/** Cast Express 5 params (string | string[]) to string safely */
+function pid(p: string | string[]): string {
+  return Array.isArray(p) ? p[0]! : p;
+}
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -142,13 +149,42 @@ export async function registerRoutes(
     throw new Error("SESSION_SECRET environment variable is required");
   }
 
-  app.use((_req, res, next) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-XSS-Protection", "1; mode=block");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
-    next();
+  app.use(
+    helmet({
+      contentSecurityPolicy: process.env.NODE_ENV === "production"
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              imgSrc: ["'self'", "data:", "blob:"],
+              fontSrc: ["'self'"],
+              connectSrc: ["'self'"],
+              frameSrc: ["'none'"],
+              objectSrc: ["'none'"],
+            },
+          }
+        : false,
+      hsts: process.env.NODE_ENV === "production"
+        ? { maxAge: 31536000, includeSubDomains: true }
+        : false,
+    })
+  );
+
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { message: "Too many login attempts. Please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const surveyLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: { message: "Too many survey submissions from this IP." },
+    standardHeaders: true,
+    legacyHeaders: false,
   });
 
   app.use(
@@ -170,7 +206,9 @@ export async function registerRoutes(
   );
 
   await pushSchema();
-  await seedDatabase();
+  if (process.env.NODE_ENV !== "production") {
+    await seedDatabase();
+  }
 
   setInterval(async () => {
     try {
@@ -247,7 +285,7 @@ export async function registerRoutes(
     }
   }, 15 * 60 * 1000);
 
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post("/api/auth/login", loginLimiter, async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Username and password required" });
@@ -291,7 +329,14 @@ export async function registerRoutes(
   });
 
   app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
-    const user = await storage.getUser(req.params.id);
+    const requestingUser = await storage.getUser(req.session.userId!);
+    if (!requestingUser) return res.status(401).json({ message: "Unauthorized" });
+    const targetId = pid(req.params.id);
+    // Members can only view their own profile; admins can view any
+    if (requestingUser.role !== "admin" && requestingUser.id !== targetId) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    const user = await storage.getUser(targetId);
     if (!user) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = user;
     res.json(safeUser);
@@ -343,7 +388,7 @@ export async function registerRoutes(
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.errors[0].message });
     }
-    const existingUser = await storage.getUser(req.params.id as string);
+    const existingUser = await storage.getUser(pid(req.params.id) as string);
     if (!existingUser) return res.status(404).json({ message: "User not found" });
 
     const { username, password, name, email, role, assignedAdminId } = parsed.data;
@@ -361,21 +406,21 @@ export async function registerRoutes(
     if (assignedAdminId !== undefined) updateData.assignedAdminId = assignedAdminId || null;
     if (password) updateData.password = await hashPassword(password);
 
-    const user = await storage.updateUser(req.params.id as string, updateData);
+    const user = await storage.updateUser(pid(req.params.id) as string, updateData);
     if (!user) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = user;
     res.json(safeUser);
   });
 
   app.delete("/api/users/:id", requireAdmin, async (req: Request, res: Response) => {
-    const user = await storage.getUser(req.params.id as string);
+    const user = await storage.getUser(pid(req.params.id) as string);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.id === req.session.userId) {
       return res.status(400).json({ message: "Cannot delete yourself" });
     }
 
-    await storage.deleteUser(req.params.id as string);
+    await storage.deleteUser(pid(req.params.id) as string);
     res.json({ message: "User deleted" });
   });
 
@@ -443,7 +488,7 @@ export async function registerRoutes(
     }
 
     const inspections = await storage.getInspectionsByServiceMember(user.id);
-    const tenantIds = [...new Set(inspections.map(i => i.tenantId).filter(Boolean) as string[])];
+    const tenantIds = Array.from(new Set(inspections.map(i => i.tenantId).filter(Boolean) as string[]));
     return res.json(await storage.getTenantsByIds(tenantIds));
   });
 
@@ -451,7 +496,7 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    const tenant = await storage.getTenant(req.params.id);
+    const tenant = await storage.getTenant(pid(req.params.id));
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
 
     if (user.role !== "admin") {
@@ -487,7 +532,7 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    const existing = await storage.getTenant(req.params.id);
+    const existing = await storage.getTenant(pid(req.params.id));
     if (!existing) return res.status(404).json({ message: "Tenant not found" });
 
     if (user.role !== "admin") {
@@ -500,14 +545,14 @@ export async function registerRoutes(
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.errors[0].message });
     }
-    const tenant = await storage.updateTenant(req.params.id, parsed.data);
+    const tenant = await storage.updateTenant(pid(req.params.id), parsed.data);
     res.json(tenant);
   });
 
   app.delete("/api/tenants/:id", requireAdmin, async (req: Request, res: Response) => {
-    const tenant = await storage.getTenant(req.params.id);
+    const tenant = await storage.getTenant(pid(req.params.id));
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
-    await storage.deleteTenant(req.params.id);
+    await storage.deleteTenant(pid(req.params.id));
     res.json({ message: "Tenant deleted" });
   });
 
@@ -525,7 +570,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/inspections/:id", requireAuth, async (req: Request, res: Response) => {
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) return res.status(404).json({ message: "Not found" });
 
     const user = await storage.getUser(req.session.userId!);
@@ -552,7 +597,7 @@ export async function registerRoutes(
     const hasAssignment = !!(data.assignedServiceMemberId && data.inspectionDate);
     const status = hasAssignment ? "scheduled" : "new";
 
-    let assignmentStatus: string | null = null;
+    let assignmentStatus: "pending" | "accepted" | "rejected" | "expired" | null = null;
     let assignmentExpiresAt: Date | null = null;
     if (hasAssignment) {
       assignmentStatus = "pending";
@@ -590,7 +635,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
     }
 
-    const existing = await storage.getInspection(req.params.id);
+    const existing = await storage.getInspection(pid(req.params.id));
     if (!existing) return res.status(404).json({ message: "Not found" });
 
     if (existing.status === "final_closed") {
@@ -624,7 +669,7 @@ export async function registerRoutes(
       }
     }
 
-    const inspection = await storage.updateInspection(req.params.id, updateData);
+    const inspection = await storage.updateInspection(pid(req.params.id), updateData);
 
     if (serviceMemberChanged && data.assignedServiceMemberId) {
       // TODO: Send assignment notification email to service member
@@ -640,14 +685,14 @@ export async function registerRoutes(
     }
     const { assignedServiceMemberId, inspectionDate, inspectionTime } = parsed.data;
 
-    const existingInspection = await storage.getInspection(req.params.id);
+    const existingInspection = await storage.getInspection(pid(req.params.id));
     if (!existingInspection) return res.status(404).json({ message: "Not found" });
 
     const isEmergency = existingInspection.isEmergency;
     const expiryHours = isEmergency ? 12 : 24;
     const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
-    const inspection = await storage.updateInspection(req.params.id, {
+    const inspection = await storage.updateInspection(pid(req.params.id), {
       assignedServiceMemberId,
       inspectionDate,
       inspectionTime: inspectionTime || null,
@@ -662,7 +707,7 @@ export async function registerRoutes(
   });
 
   app.patch("/api/inspections/:id/accept-assignment", requireAuth, async (req: Request, res: Response) => {
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) return res.status(404).json({ message: "Not found" });
 
     if (inspection.assignedServiceMemberId !== req.session.userId) {
@@ -675,7 +720,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Assignment has expired" });
     }
 
-    const updated = await storage.updateInspection(req.params.id, {
+    const updated = await storage.updateInspection(pid(req.params.id), {
       assignmentStatus: "accepted",
       assignmentRespondedAt: new Date(),
     });
@@ -695,7 +740,7 @@ export async function registerRoutes(
   });
 
   app.patch("/api/inspections/:id/reject-assignment", requireAuth, async (req: Request, res: Response) => {
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) return res.status(404).json({ message: "Not found" });
 
     if (inspection.assignedServiceMemberId !== req.session.userId) {
@@ -705,7 +750,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Assignment is not pending" });
     }
 
-    const updated = await storage.updateInspection(req.params.id, {
+    const updated = await storage.updateInspection(pid(req.params.id), {
       assignmentStatus: "rejected",
       assignmentRespondedAt: new Date(),
       status: "new",
@@ -729,7 +774,7 @@ export async function registerRoutes(
   });
 
   app.patch("/api/inspections/:id/close", requireAuth, async (req: Request, res: Response) => {
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) return res.status(404).json({ message: "Not found" });
 
     const user = await storage.getUser(req.session.userId!);
@@ -739,13 +784,13 @@ export async function registerRoutes(
       return res.status(403).json({ message: "You are not assigned to this inspection" });
     }
 
-    const reports = await storage.getReportsByInspection(req.params.id);
+    const reports = await storage.getReportsByInspection(pid(req.params.id));
     if (reports.length === 0) {
       return res.status(400).json({ message: "An inspection report file must be uploaded before closing" });
     }
 
     const { completionNotes } = req.body;
-    const updated = await storage.updateInspection(req.params.id, {
+    const updated = await storage.updateInspection(pid(req.params.id), {
       status: "closed",
       completionNotes: completionNotes || null,
     });
@@ -770,30 +815,30 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Admin notes are required for final close" });
     }
 
-    const existing = await storage.getInspection(req.params.id);
+    const existing = await storage.getInspection(pid(req.params.id));
     if (!existing) return res.status(404).json({ message: "Not found" });
 
     if (existing.status !== "closed") {
       return res.status(400).json({ message: "Inspection must be closed before final close" });
     }
 
-    const reports = await storage.getReportsByInspection(req.params.id);
+    const reports = await storage.getReportsByInspection(pid(req.params.id));
     if (reports.length === 0) {
       return res.status(400).json({ message: "No reports found for this inspection" });
     }
 
-    const inspection = await storage.updateInspection(req.params.id, {
+    const inspection = await storage.updateInspection(pid(req.params.id), {
       status: "final_closed",
       adminNotes: adminNotes.trim(),
     });
 
     let npsSurveyUrl = "";
-    const existingSurvey = await storage.getNpsSurveyByInspection(req.params.id);
+    const existingSurvey = await storage.getNpsSurveyByInspection(pid(req.params.id));
     if (!existingSurvey) {
       const token = randomUUID();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await storage.createNpsSurvey({
-        inspectionId: req.params.id,
+        inspectionId: pid(req.params.id),
         token,
         expiresAt,
       });
@@ -809,14 +854,14 @@ export async function registerRoutes(
   });
 
   app.patch("/api/inspections/:id/cancel", requireAdmin, async (req: Request, res: Response) => {
-    const inspection = await storage.updateInspection(req.params.id, {
+    const inspection = await storage.updateInspection(pid(req.params.id), {
       status: "canceled",
     });
     res.json(inspection);
   });
 
   app.post("/api/inspections/:id/trigger-nps", requireAdmin, async (req: Request, res: Response) => {
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) return res.status(404).json({ message: "Inspection not found" });
 
     const existing = await storage.getNpsSurveyByInspection(inspection.id);
@@ -839,7 +884,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/inspections/:id/nps-survey", requireAdmin, async (req: Request, res: Response) => {
-    const survey = await storage.getNpsSurveyByInspection(req.params.id);
+    const survey = await storage.getNpsSurveyByInspection(pid(req.params.id));
     if (!survey) return res.status(404).json({ message: "No NPS survey found" });
 
     const isActive = new Date(survey.expiresAt) > new Date();
@@ -848,7 +893,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/inspections/:id/reactivate-nps", requireAdmin, async (req: Request, res: Response) => {
-    const survey = await storage.getNpsSurveyByInspection(req.params.id);
+    const survey = await storage.getNpsSurveyByInspection(pid(req.params.id));
     if (!survey) return res.status(404).json({ message: "No NPS survey found" });
 
     if (survey.completedAt) {
@@ -866,8 +911,8 @@ export async function registerRoutes(
     res.json({ survey: { ...survey, expiresAt: newExpiresAt }, surveyUrl: fullUrl, isActive: true });
   });
 
-  app.get("/api/survey/:token", async (req: Request, res: Response) => {
-    const survey = await storage.getNpsSurveyByToken(req.params.token);
+  app.get("/api/survey/:token", surveyLimiter, async (req: Request, res: Response) => {
+    const survey = await storage.getNpsSurveyByToken(pid(req.params.token));
     if (!survey) return res.status(404).json({ message: "Survey not found" });
 
     const inspection = await storage.getInspection(survey.inspectionId);
@@ -899,8 +944,8 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/survey/:token/respond", async (req: Request, res: Response) => {
-    const survey = await storage.getNpsSurveyByToken(req.params.token);
+  app.post("/api/survey/:token/respond", surveyLimiter, async (req: Request, res: Response) => {
+    const survey = await storage.getNpsSurveyByToken(pid(req.params.token));
     if (!survey) return res.status(404).json({ message: "Survey not found" });
     if (survey.completedAt) return res.status(400).json({ message: "Survey already completed" });
     if (survey.expiresAt < new Date()) return res.status(400).json({ message: "Survey expired" });
@@ -951,7 +996,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const inspection = await storage.getInspection(req.params.id);
+    const inspection = await storage.getInspection(pid(req.params.id));
     if (!inspection) {
       return res.status(404).json({ message: "Inspection not found" });
     }
@@ -968,7 +1013,7 @@ export async function registerRoutes(
     }
 
     const report = await storage.createInspectionReport({
-      inspectionId: req.params.id,
+      inspectionId: pid(req.params.id),
       uploadedById: req.session.userId!,
       fileName: req.file.filename,
       originalName: req.file.originalname,
@@ -985,9 +1030,9 @@ export async function registerRoutes(
 
     let reports;
     if (user.role === "admin") {
-      reports = await storage.getReportsByInspection(req.params.id);
+      reports = await storage.getReportsByInspection(pid(req.params.id));
     } else {
-      reports = await storage.getReportsByUploader(req.params.id, user.id);
+      reports = await storage.getReportsByUploader(pid(req.params.id), user.id);
     }
     res.json(reports);
   });
@@ -996,7 +1041,7 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    const report = await storage.getReport(req.params.id);
+    const report = await storage.getReport(pid(req.params.id));
     if (!report) return res.status(404).json({ message: "Report not found" });
 
     if (user.role !== "admin" && report.uploadedById !== user.id) {
@@ -1018,7 +1063,7 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId!);
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    const report = await storage.getReport(req.params.id);
+    const report = await storage.getReport(pid(req.params.id));
     if (!report) return res.status(404).json({ message: "Report not found" });
 
     if (report.uploadedById !== user.id && user.role !== "admin") {
@@ -1050,7 +1095,7 @@ export async function registerRoutes(
   });
 
   app.patch("/api/notifications/:id/read", requireAdmin, async (req: Request, res: Response) => {
-    await storage.markNotificationRead(req.params.id);
+    await storage.markNotificationRead(pid(req.params.id));
     res.json({ message: "Notification marked as read" });
   });
 

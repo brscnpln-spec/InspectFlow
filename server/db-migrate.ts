@@ -51,7 +51,6 @@ export async function pushSchema(): Promise<void> {
           assigned_by_admin_id VARCHAR,
           inspection_date TEXT,
           inspection_time TEXT,
-          report_url TEXT,
           completion_notes TEXT,
           admin_notes TEXT,
           is_emergency BOOLEAN DEFAULT false,
@@ -146,6 +145,11 @@ export async function pushSchema(): Promise<void> {
 
     await pool.query(`
       ALTER TABLE inspection_requests ADD COLUMN IF NOT EXISTS tenant_id VARCHAR;
+    `);
+
+    // Drop legacy report_url column — file uploads are handled via inspection_reports table.
+    await pool.query(`
+      ALTER TABLE inspection_requests DROP COLUMN IF EXISTS report_url;
     `);
 
     await pool.query(`

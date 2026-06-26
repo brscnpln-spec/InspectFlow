@@ -47,7 +47,6 @@ export const inspectionRequests = pgTable("inspection_requests", {
   assignedByAdminId: varchar("assigned_by_admin_id").references(() => users.id, { onDelete: "set null" }),
   inspectionDate: text("inspection_date"),
   inspectionTime: text("inspection_time"),
-  reportUrl: text("report_url"),
   completionNotes: text("completion_notes"),
   adminNotes: text("admin_notes"),
   isEmergency: boolean("is_emergency").default(false),

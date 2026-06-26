@@ -36,6 +36,10 @@ replit.md
 # User-uploaded prompt/document assets — not part of source
 attached_assets/
 
+# Generated test artifacts
+coverage/
+gitleaks-report.json
+
 # Logs
 *.log
 npm-debug.log*

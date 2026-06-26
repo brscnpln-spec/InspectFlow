@@ -4,7 +4,7 @@ import session from "express-session";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { storage } from "./storage";
+import { storage, toSafeUser } from "./storage";
 import { comparePasswords, hashPassword } from "./auth";
 import { seedDatabase } from "./seed";
 import { randomUUID } from "crypto";
@@ -347,10 +347,9 @@ export async function registerRoutes(
     }
     req.session.userId = user.id;
     req.session.csrfToken = randomUUID();
-    const { password: _, ...safeUser } = user;
     // Deliver CSRF token in a response header, not the body, so it never appears in logs or JSON payloads.
     res.setHeader("X-CSRF-Token", req.session.csrfToken);
-    res.json(safeUser);
+    res.json(toSafeUser(user));
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
@@ -364,9 +363,8 @@ export async function registerRoutes(
     if (!req.session.csrfToken) {
       req.session.csrfToken = randomUUID();
     }
-    const { password: _, ...safeUser } = user;
     res.setHeader("X-CSRF-Token", req.session.csrfToken);
-    res.json(safeUser);
+    res.json(toSafeUser(user));
   });
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {
@@ -377,12 +375,12 @@ export async function registerRoutes(
 
   app.get("/api/users/service-members", requireAuth, async (req: Request, res: Response) => {
     const members = await storage.getServiceMembers();
-    res.json(members.map(({ password: _, ...m }) => m));
+    res.json(members.map(toSafeUser));
   });
 
   app.get("/api/users", requireAdmin, async (req: Request, res: Response) => {
     const allUsers = await storage.getAllUsers();
-    res.json(allUsers.map(({ password: _, ...u }) => u));
+    res.json(allUsers.map(toSafeUser));
   });
 
   app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
@@ -395,8 +393,7 @@ export async function registerRoutes(
     }
     const user = await storage.getUser(targetId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    const { password: _, ...safeUser } = user;
-    res.json(safeUser);
+    res.json(toSafeUser(user));
   });
 
   const PASSWORD_POLICY = z
@@ -444,8 +441,7 @@ export async function registerRoutes(
       role,
       assignedAdminId: assignedAdminId || null,
     });
-    const { password: _, ...safeUser } = user;
-    res.status(201).json(safeUser);
+    res.status(201).json(toSafeUser(user));
   });
 
   app.patch("/api/users/:id", requireAdmin, async (req: Request, res: Response) => {
@@ -473,8 +469,7 @@ export async function registerRoutes(
 
     const user = await storage.updateUser(pid(req.params.id) as string, updateData);
     if (!user) return res.status(404).json({ message: "User not found" });
-    const { password: _, ...safeUser } = user;
-    res.json(safeUser);
+    res.json(toSafeUser(user));
   });
 
   app.delete("/api/users/:id", requireAdmin, async (req: Request, res: Response) => {

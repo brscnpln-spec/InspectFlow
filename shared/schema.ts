@@ -123,6 +123,8 @@ export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+/** User shape safe to send to clients — password hash is structurally absent. */
+export type SafeUser = Omit<User, "password">;
 export type InspectionRequest = typeof inspectionRequests.$inferSelect;
 export type InsertInspectionRequest = z.infer<typeof insertInspectionSchema>;
 export type NpsSurvey = typeof npsSurveys.$inferSelect;

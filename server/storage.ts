@@ -11,6 +11,7 @@ import {
   type Tenant,
   type InsertTenant,
   type User,
+  type SafeUser,
   type InsertUser,
   type InspectionRequest,
   type InsertInspectionRequest,
@@ -22,7 +23,18 @@ import {
   type InsertInspectionReport,
   type Notification,
 } from "@shared/schema";
+
 import { randomUUID } from "crypto";
+
+/**
+ * Strip the password hash before the object leaves the server layer.
+ * Use this on every code path that returns user data to the client.
+ * Internal auth code that needs the hash should operate on the raw User directly.
+ */
+export function toSafeUser(user: User): SafeUser {
+  const { password: _, ...safe } = user;
+  return safe;
+}
 
 export interface IStorage {
   getTenants(): Promise<Tenant[]>;

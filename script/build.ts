@@ -18,7 +18,6 @@ const allowlist = [
   "pg",
   "ws",
   "zod",
-  "zod-validation-error",
 ];
 
 async function buildAll() {

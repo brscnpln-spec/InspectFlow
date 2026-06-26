@@ -116,7 +116,7 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
+  password: z.string().min(1, "Password is required").max(1024, "Password too long"),
 });
 
 export type Tenant = typeof tenants.$inferSelect;

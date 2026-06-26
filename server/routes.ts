@@ -157,14 +157,6 @@ function requireAuth(req: Request, res: Response, next: Function) {
   next();
 }
 
-function requireCsrf(req: Request, res: Response, next: Function) {
-  const token = req.headers["x-csrf-token"];
-  if (!token || token !== req.session.csrfToken) {
-    return res.status(403).json({ message: "Invalid CSRF token" });
-  }
-  next();
-}
-
 async function requireAdmin(req: Request, res: Response, next: Function) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Unauthorized" });

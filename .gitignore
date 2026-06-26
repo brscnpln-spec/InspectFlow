@@ -27,6 +27,7 @@ Thumbs.db
 .upm/
 .local/
 .agents/
+.replit
 
 # Internal project documentation — contains API surface and architecture details.
 # Not a secret file but should not be indexed by GitHub/search engines.

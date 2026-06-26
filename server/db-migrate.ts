@@ -170,6 +170,7 @@ export async function pushSchema(): Promise<void> {
 
     console.log("Database schema verified successfully");
   } catch (e: any) {
-    console.error("Schema verification error:", e.message);
+    console.error("Schema migration failed — aborting startup:", e.message);
+    throw e; // never start with an inconsistent schema
   }
 }

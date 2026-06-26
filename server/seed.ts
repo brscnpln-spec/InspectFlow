@@ -18,44 +18,48 @@ function resolveSeedPassword(envVar: string): string {
 }
 
 export async function seedDatabase() {
-  const existingAdmin = await storage.getUserByUsername("tanweer");
+  // Guard key uses the first admin username defined below.
+  const existingAdmin = await storage.getUserByUsername("admin1");
   if (existingAdmin) return;
 
   const adminPassword = await hashPassword(resolveSeedPassword("SEED_ADMIN_PASSWORD"));
   const memberPassword = await hashPassword(resolveSeedPassword("SEED_MEMBER_PASSWORD"));
 
+  // All names and emails below are entirely fictional.
+  // Domain: example.com — reserved by RFC 2606, guaranteed not to belong to any real person or company.
+
   const admin1 = await storage.createUser({
-    username: "tanweer",
+    username: "admin1",
     password: adminPassword,
-    name: "Tanweer Ahmed",
-    email: "tanweer@ogi.com",
+    name: "Alice Ingram",
+    email: "alice.ingram@example.com",
     role: "admin",
     assignedAdminId: null,
   });
 
   const admin2 = await storage.createUser({
-    username: "sanjeev",
+    username: "admin2",
     password: adminPassword,
-    name: "Sanjeev Kumar",
-    email: "sanjeev@ogi.com",
+    name: "Bob Marsh",
+    email: "bob.marsh@example.com",
     role: "admin",
     assignedAdminId: null,
   });
 
   const memberNames1 = [
-    { name: "Ravi Sharma", username: "ravi" },
-    { name: "Priya Patel", username: "priya" },
-    { name: "Amit Singh", username: "amit" },
-    { name: "Neha Gupta", username: "neha" },
-    { name: "Vikram Mehta", username: "vikram" },
+    { name: "Carl Novak",   username: "member1" },
+    { name: "Dana Ellis",   username: "member2" },
+    { name: "Evan Torres",  username: "member3" },
+    { name: "Fiona Blake",  username: "member4" },
+    { name: "Glen Harmon",  username: "member5" },
   ];
 
   const memberNames2 = [
-    { name: "Arun Kumar", username: "arun" },
-    { name: "Sneha Reddy", username: "sneha" },
-    { name: "Rahul Verma", username: "rahul" },
-    { name: "Deepa Nair", username: "deepa" },
-    { name: "Kiran Joshi", username: "kiran" },
+    { name: "Hana Wolfe",   username: "member6" },
+    { name: "Ivan Cross",   username: "member7" },
+    { name: "Jana Reed",    username: "member8" },
+    { name: "Kyle Stone",   username: "member9" },
+    { name: "Lena Frost",   username: "member10" },
   ];
 
   const members: any[] = [];
@@ -65,7 +69,7 @@ export async function seedDatabase() {
       username: m.username,
       password: memberPassword,
       name: m.name,
-      email: `${m.username}@ogi.com`,
+      email: `${m.username}@example.com`,
       role: "service_member",
       assignedAdminId: admin1.id,
     });
@@ -77,7 +81,7 @@ export async function seedDatabase() {
       username: m.username,
       password: memberPassword,
       name: m.name,
-      email: `${m.username}@ogi.com`,
+      email: `${m.username}@example.com`,
       role: "service_member",
       assignedAdminId: admin2.id,
     });
@@ -85,19 +89,19 @@ export async function seedDatabase() {
   }
 
   const companies = [
-    { name: "Acme Industries", contact1: "John Smith", contact2: "Jane Doe", phone1: "+1-555-0101", phone2: "+1-555-0102", email1: "john@acme.com", email2: "jane@acme.com" },
-    { name: "Global Tech Solutions", contact1: "Michael Chen", contact2: "Sarah Lee", phone1: "+1-555-0201", phone2: "+1-555-0202", email1: "michael@globaltech.com", email2: "sarah@globaltech.com" },
-    { name: "Petromax Corp", contact1: "David Brown", contact2: "Lisa Wang", phone1: "+1-555-0301", phone2: "+1-555-0302", email1: "david@petromax.com", email2: "lisa@petromax.com" },
-    { name: "Nordic Engineering", contact1: "Erik Larson", contact2: "Anna Svensson", phone1: "+46-555-0401", phone2: "+46-555-0402", email1: "erik@nordic.com", email2: "anna@nordic.com" },
-    { name: "Arabian Gas Works", contact1: "Omar Al-Hassan", contact2: "Fatima Al-Said", phone1: "+971-555-0501", phone2: "+971-555-0502", email1: "omar@agw.com", email2: "fatima@agw.com" },
+    { name: "Acme Industries",       contact1: "John Smith",      contact2: "Jane Doe",         phone1: "+1-555-0101", phone2: "+1-555-0102", email1: "john@acme.example.com",       email2: "jane@acme.example.com" },
+    { name: "Global Tech Solutions",  contact1: "Michael Chen",    contact2: "Sarah Lee",        phone1: "+1-555-0201", phone2: "+1-555-0202", email1: "michael@globaltech.example.com", email2: "sarah@globaltech.example.com" },
+    { name: "Petromax Corp",          contact1: "David Brown",     contact2: "Lisa Wang",        phone1: "+1-555-0301", phone2: "+1-555-0302", email1: "david@petromax.example.com",  email2: "lisa@petromax.example.com" },
+    { name: "Nordic Engineering",     contact1: "Erik Larson",     contact2: "Anna Svensson",    phone1: "+46-555-0401", phone2: "+46-555-0402", email1: "erik@nordic.example.com",   email2: "anna@nordic.example.com" },
+    { name: "Arabian Gas Works",      contact1: "Omar Al-Hassan",  contact2: "Fatima Al-Said",  phone1: "+971-555-0501", phone2: "+971-555-0502", email1: "omar@agw.example.com",     email2: "fatima@agw.example.com" },
   ];
 
   const inspections: Array<typeof companies[0] & { member: typeof members[0]; admin: typeof admin1; status: "new" | "scheduled" | "closed" | "final_closed"; date: string | null; time: string | null; recurring: number | null; emergency?: boolean }> = [
-    { ...companies[0], member: members[0], admin: admin1, status: "scheduled", date: "2026-03-05", time: "09:00", recurring: 45 },
-    { ...companies[1], member: members[1], admin: admin1, status: "new", date: null, time: null, recurring: 60 },
-    { ...companies[2], member: members[2], admin: admin1, status: "closed", date: "2026-02-20", time: "14:00", recurring: 45 },
+    { ...companies[0], member: members[0], admin: admin1, status: "scheduled",   date: "2026-03-05", time: "09:00", recurring: 45 },
+    { ...companies[1], member: members[1], admin: admin1, status: "new",         date: null,         time: null,    recurring: 60 },
+    { ...companies[2], member: members[2], admin: admin1, status: "closed",      date: "2026-02-20", time: "14:00", recurring: 45 },
     { ...companies[3], member: members[5], admin: admin2, status: "final_closed", date: "2026-02-15", time: "10:30", recurring: 60 },
-    { ...companies[4], member: members[6], admin: admin2, status: "scheduled", date: "2026-03-10", time: "11:00", recurring: null, emergency: true },
+    { ...companies[4], member: members[6], admin: admin2, status: "scheduled",   date: "2026-03-10", time: "11:00", recurring: null, emergency: true },
   ];
 
   for (const ins of inspections) {

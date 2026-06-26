@@ -96,5 +96,5 @@
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
   },
-  "private": "true"
+  "private": true
 }

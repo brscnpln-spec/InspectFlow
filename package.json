@@ -46,6 +46,7 @@
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.18.1",
     "helmet": "^8.2.0",
+    "license-checker-rseidelsohn": "^4.4.2",
     "lucide-react": "^0.453.0",
     "multer": "^2.2.0",
     "pg": "^8.16.3",

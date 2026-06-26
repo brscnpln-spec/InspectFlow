@@ -33,10 +33,10 @@ jobs:
         run: npm exec -- license-checker-rseidelsohn --excludePrivatePackages --excludePackages "@replit/vite-plugin-cartographer;@replit/vite-plugin-dev-banner;@replit/vite-plugin-runtime-error-modal" --onlyAllow "MIT;ISC;0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;MPL-2.0;(MIT AND CC-BY-3.0);MIT AND ISC"
 
       - name: Test
-        run: npm test
+        run: npm exec -- vitest run
 
       - name: Build
-        run: npm run build
+        run: npm exec -- tsx script/build.ts
 
   sbom:
     name: SBOM

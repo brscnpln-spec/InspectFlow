@@ -35,6 +35,22 @@ jobs:
       - name: Build
         run: npm run build
 
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: true
+          artifact-name: sbom-${{ github.sha }}
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

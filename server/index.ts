@@ -20,23 +20,61 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+/**
+ * Fields that must never appear in log output regardless of environment.
+ * Add any new credential/PII field names here as they are introduced.
+ */
+const SENSITIVE_LOG_KEYS = new Set([
+  "password",
+  "csrfToken",
+  "token",
+  "email",
+  "email_1",
+  "email_2",
+  "phone",
+  "phone_1",
+  "phone_2",
+]);
+
+/**
+ * Returns a shallow clone of `obj` with SENSITIVE_LOG_KEYS removed.
+ * Only called in development; production logs no body at all.
+ */
+function sanitizeForLog(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (!SENSITIVE_LOG_KEYS.has(k)) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  // Only intercept res.json in development — production never logs the body.
+  if (!IS_PRODUCTION) {
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+
+      if (!IS_PRODUCTION && capturedJsonResponse) {
+        const safe = sanitizeForLog(capturedJsonResponse);
+        const serialized = JSON.stringify(safe);
+        logLine += ` :: ${serialized.length > 200 ? serialized.slice(0, 200) + "…" : serialized}`;
       }
 
       log(logLine);

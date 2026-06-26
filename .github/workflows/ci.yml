@@ -25,12 +25,13 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Debug install
         run: |
-          echo "vitest installed: $(ls node_modules/vitest 2>/dev/null && echo YES || echo NO)"
-          echo "node_modules/.bin entries: $(ls node_modules/.bin | wc -l)"
+          echo "NODE_ENV=$NODE_ENV"
+          ls node_modules/vitest > /dev/null 2>&1 && echo "vitest: YES" || echo "vitest: NO"
+          ls node_modules/.bin/license-checker-rseidelsohn > /dev/null 2>&1 && echo "license-checker: YES" || echo "license-checker: NO"
 
       - name: Security audit
         run: npm audit --audit-level=high

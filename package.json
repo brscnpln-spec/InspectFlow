@@ -9,7 +9,9 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "license:check": "license-checker-rseidelsohn --excludePrivatePackages --excludePackages \"@replit/vite-plugin-cartographer;@replit/vite-plugin-dev-banner;@replit/vite-plugin-runtime-error-modal\" --onlyAllow \"MIT;ISC;0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;MPL-2.0;(MIT AND CC-BY-3.0);MIT AND ISC\""
+    "license:check": "license-checker-rseidelsohn --excludePrivatePackages --excludePackages \"@replit/vite-plugin-cartographer;@replit/vite-plugin-dev-banner;@replit/vite-plugin-runtime-error-modal\" --onlyAllow \"MIT;ISC;0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;MPL-2.0;(MIT AND CC-BY-3.0);MIT AND ISC\"",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -70,17 +72,21 @@
     "@types/node": "20.19.27",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "@types/supertest": "^6.0.3",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.0",
     "license-checker-rseidelsohn": "^4.4.2",
     "postcss": "^8.5.15",
+    "supertest": "^7.1.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
-    "vite": "^7.3.6"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "drizzle-kit": {

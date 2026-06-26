@@ -16,6 +16,14 @@ import { loginSchema, type InspectionRequest, type Notification } from "@shared/
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 
+export const PASSWORD_POLICY = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/,
+    "Password must include uppercase, lowercase, a number, and a special character"
+  );
+
 /** Cast Express 5 params (string | string[]) to string safely */
 function pid(p: string | string[]): string {
   return Array.isArray(p) ? p[0]! : p;
@@ -71,7 +79,7 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   "text/plain":  [],
 };
 
-function validateMagicBytes(filePath: string, mimeType: string): boolean {
+export function validateMagicBytes(filePath: string, mimeType: string): boolean {
   const sigs = MAGIC_BYTES[mimeType];
   if (sigs === undefined) return false;
   if (sigs.length === 0) return true;
@@ -387,14 +395,6 @@ export async function registerRoutes(
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(toSafeUser(user));
   });
-
-  const PASSWORD_POLICY = z
-    .string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/,
-      "Password must include uppercase, lowercase, a number, and a special character"
-    );
 
   const createUserSchema = z.object({
     username: z.string().min(1, "Username is required").max(50),

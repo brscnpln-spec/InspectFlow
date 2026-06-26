@@ -25,14 +25,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Update npm
-        run: npm install -g npm@latest
-
       - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Link binaries
-        run: npm rebuild
+        run: npm ci
 
       - name: Security audit
         run: npm audit --audit-level=high

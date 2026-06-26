@@ -10,6 +10,12 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       include: ["server/**/*.ts"],
       exclude: ["server/index.ts", "server/vite.ts", "server/static.ts", "server/__tests__/**"],
+      thresholds: {
+        lines: 50,
+        functions: 50,
+        branches: 40,
+        statements: 50,
+      },
     },
   },
   resolve: {

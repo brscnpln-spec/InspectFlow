@@ -8,7 +8,8 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "license:check": "license-checker-rseidelsohn --excludePrivatePackages --excludePackages \"@replit/vite-plugin-cartographer;@replit/vite-plugin-dev-banner;@replit/vite-plugin-runtime-error-modal\" --onlyAllow \"MIT;ISC;0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;MPL-2.0;(MIT AND CC-BY-3.0);MIT AND ISC\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -74,6 +75,7 @@
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.0",
+    "license-checker-rseidelsohn": "^4.4.2",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
@@ -87,5 +89,6 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
-  }
+  },
+  "private": "true"
 }

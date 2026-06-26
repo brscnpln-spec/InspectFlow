@@ -10,6 +10,8 @@ jobs:
   ci:
     name: Audit · Test · Build
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: development
 
     steps:
       - name: Checkout
@@ -21,21 +23,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
-        env:
-          NODE_ENV: development
         run: npm ci
+
+      - name: Debug install
+        run: |
+          echo "vitest installed: $(ls node_modules/vitest 2>/dev/null && echo YES || echo NO)"
+          echo "node_modules/.bin entries: $(ls node_modules/.bin | wc -l)"
 
       - name: Security audit
         run: npm audit --audit-level=high
 
       - name: License policy check
-        run: npm exec -- license-checker-rseidelsohn --excludePrivatePackages --excludePackages "@replit/vite-plugin-cartographer;@replit/vite-plugin-dev-banner;@replit/vite-plugin-runtime-error-modal" --onlyAllow "MIT;ISC;0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;MPL-2.0;(MIT AND CC-BY-3.0);MIT AND ISC"
+        run: npm run license:check
 
       - name: Test
-        run: node ./node_modules/vitest/vitest.mjs run
+        run: npm test
 
       - name: Build
         run: npm run build

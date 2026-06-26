@@ -22,9 +22,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
-        const data = await res.json();
-        const { csrfToken, ...userData } = data;
-        if (csrfToken) setCsrfToken(csrfToken);
+        // CSRF token is delivered in the X-CSRF-Token header, never in the body.
+        const token = res.headers.get("X-CSRF-Token");
+        if (token) setCsrfToken(token);
+        const userData = await res.json();
         setUser(userData);
       } else {
         setCsrfToken(null);
@@ -53,9 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       throw new Error(data.message || "Login failed");
     }
-    const data = await res.json();
-    const { csrfToken, ...userData } = data;
-    if (csrfToken) setCsrfToken(csrfToken);
+    // CSRF token is delivered in the X-CSRF-Token header, never in the body.
+    const token = res.headers.get("X-CSRF-Token");
+    if (token) setCsrfToken(token);
+    const userData = await res.json();
     setUser(userData);
     setLocation("/");
   };

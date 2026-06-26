@@ -348,7 +348,9 @@ export async function registerRoutes(
     req.session.userId = user.id;
     req.session.csrfToken = randomUUID();
     const { password: _, ...safeUser } = user;
-    res.json({ ...safeUser, csrfToken: req.session.csrfToken });
+    // Deliver CSRF token in a response header, not the body, so it never appears in logs or JSON payloads.
+    res.setHeader("X-CSRF-Token", req.session.csrfToken);
+    res.json(safeUser);
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
@@ -363,7 +365,8 @@ export async function registerRoutes(
       req.session.csrfToken = randomUUID();
     }
     const { password: _, ...safeUser } = user;
-    res.json({ ...safeUser, csrfToken: req.session.csrfToken });
+    res.setHeader("X-CSRF-Token", req.session.csrfToken);
+    res.json(safeUser);
   });
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {

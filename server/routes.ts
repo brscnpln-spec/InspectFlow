@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import multer from "multer";
@@ -150,14 +150,14 @@ declare module "express-session" {
   }
 }
 
-function requireAuth(req: Request, res: Response, next: Function) {
+function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
   next();
 }
 
-async function requireAdmin(req: Request, res: Response, next: Function) {
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
@@ -241,7 +241,7 @@ export async function registerRoutes(
   }
 
   // CSRF protection: all authenticated non-GET mutations require matching X-CSRF-Token header
-  app.use((req: Request, res: Response, next: Function) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
     if (!req.session.userId) return next();  // unauthenticated (login/survey) — no session to forge
     if (req.path === "/api/auth/logout") return next();  // logout is benign without CSRF
@@ -1156,7 +1156,10 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Cannot delete reports from a final closed inspection" });
     }
 
-    const filePath = path.join(uploadsDir, report.fileName);
+    const filePath = path.resolve(uploadsDir, report.fileName);
+    if (!filePath.startsWith(path.resolve(uploadsDir) + path.sep)) {
+      return res.status(400).json({ message: "Invalid file path" });
+    }
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

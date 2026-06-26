@@ -36,9 +36,10 @@ replit.md
 # User-uploaded prompt/document assets — not part of source
 attached_assets/
 
-# Generated test artifacts
+# Generated artifacts — produced by CI, never committed
 coverage/
 gitleaks-report.json
+sbom.cyclonedx.json
 
 # Logs
 *.log

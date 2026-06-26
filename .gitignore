@@ -28,6 +28,10 @@ Thumbs.db
 .local/
 .agents/
 
+# Internal project documentation — contains API surface and architecture details.
+# Not a secret file but should not be indexed by GitHub/search engines.
+replit.md
+
 # User-uploaded prompt/document assets — not part of source
 attached_assets/
 

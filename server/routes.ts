@@ -187,6 +187,19 @@ export async function registerRoutes(
     throw new Error("SESSION_SECRET environment variable is required");
   }
 
+  app.get("/healthz", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
+  app.get("/readyz", async (_req, res) => {
+    try {
+      await pool.query("SELECT 1");
+      res.status(200).json({ status: "ready" });
+    } catch {
+      res.status(503).json({ status: "not_ready" });
+    }
+  });
+
   app.use(
     helmet({
       contentSecurityPolicy: process.env.NODE_ENV === "production"
